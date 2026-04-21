@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using WebAPI.Data;
+using WebAPI.Interfaces;
+using WebAPI.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,6 +18,8 @@ builder.Services.AddCors(options =>
             .AllowAnyMethod();
     });
 });
+
+builder.Services.AddScoped<IStudentService, StudentService>();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();

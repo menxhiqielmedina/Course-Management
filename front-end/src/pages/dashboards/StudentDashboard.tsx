@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { getStudents } from "@/lib/studentService";
 
 type Student = {
   id: number;
@@ -14,13 +15,7 @@ const StudentDashboard = () => {
   useEffect(() => {
     const loadStudents = async () => {
       try {
-        const response = await fetch("http://localhost:5000/api/Students");
-
-        if (!response.ok) {
-          throw new Error("Nuk u morën të dhënat nga backend");
-        }
-
-        const data = await response.json();
+        const data = await getStudents();
         setStudents(data);
       } catch (err: any) {
         setError(err.message || "Ka ndodhur një gabim");
