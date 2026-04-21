@@ -14,7 +14,7 @@ const StudentDashboard = () => {
   useEffect(() => {
     const loadStudents = async () => {
       try {
-        const response = await fetch("https://localhost:7048/api/Students");
+        const response = await fetch("http://localhost:5000/api/Students");
 
         if (!response.ok) {
           throw new Error("Nuk u morën të dhënat nga backend");
