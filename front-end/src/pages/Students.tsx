@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { useEffect } from "react";
+import { getStudents } from "@/lib/studentService";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -23,7 +25,7 @@ const PAGE_SIZE = 8;
 
 const Students = () => {
   const navigate = useNavigate();
-  const { students } = useAppStore();
+  const [students, setStudents] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [major, setMajor] = useState("all");
   const [sortKey, setSortKey] = useState<"name" | "gpa" | "year">("name");
@@ -133,5 +135,30 @@ const Students = () => {
     </div>
   );
 };
+useEffect(() => {
+  const loadStudents = async () => {
+    try {
+      const data = await getStudents();
+
+      // Mapping sepse backend ≠ frontend model
+      const mapped = data.map((s: any) => ({
+        id: s.id,
+        name: s.fullName,
+        email: s.email,
+        studentId: "N/A",
+        major: "Computer Science",
+        year: 1,
+        gpa: 0,
+        status: "active",
+      }));
+
+      setStudents(mapped);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  loadStudents();
+}, []);
 
 export default Students;
