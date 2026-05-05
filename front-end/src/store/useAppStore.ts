@@ -11,8 +11,14 @@ import {
 interface AppState {
   // Auth
   user: User | null;
+  token: string | null;
   login: (email: string, role: Role) => void;
+  loginFromApi: (id: number, fullName: string, email: string, role: Role, token: string) => void;
   logout: () => void;
+
+  // Admin
+  pendingStudentCount: number;
+  setPendingStudentCount: (n: number) => void;
 
   // Theme
   theme: "light" | "dark";
@@ -60,11 +66,18 @@ export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
       user: null,
+      token: null,
       login: (email, role) => {
         const name = email.split("@")[0].replace(/\./g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
-        set({ user: { id: uid(), name: name || "User", email, role } });
+        set({ user: { id: uid(), name: name || "User", email, role }, token: null });
       },
-      logout: () => set({ user: null }),
+      loginFromApi: (id, fullName, email, role, token) => {
+        set({ user: { id: String(id), name: fullName, email, role }, token });
+      },
+      logout: () => set({ user: null, token: null }),
+
+      pendingStudentCount: 0,
+      setPendingStudentCount: (n) => set({ pendingStudentCount: n }),
 
       theme: "light",
       toggleTheme: () =>
@@ -115,7 +128,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: "cms-app-store",
-      partialize: (s) => ({ user: s.user, theme: s.theme }),
+      partialize: (s) => ({ user: s.user, token: s.token, theme: s.theme }),
     }
   )
 );

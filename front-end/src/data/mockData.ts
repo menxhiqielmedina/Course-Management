@@ -66,6 +66,7 @@ export interface Notification {
   type: "info" | "success" | "warning" | "error";
   read: boolean;
   timestamp: string;
+  link?: string;
 }
 
 export interface ScheduleEvent {

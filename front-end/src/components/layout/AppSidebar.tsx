@@ -2,7 +2,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, BookOpen, Users, GraduationCap, Calendar,
   FileText, Bell, BarChart3, FolderOpen, FileCode, ScrollText,
-  Settings, GraduationCap as Logo,
+  Settings, GraduationCap as Logo, UserCog,
 } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
@@ -21,6 +21,7 @@ const adminMain = [
 ];
 
 const adminSecondary = [
+  { title: "User Management", url: "/admin/pending", icon: UserCog },
   { title: "Reports", url: "/reports", icon: BarChart3 },
   { title: "Files", url: "/files", icon: FolderOpen },
   { title: "Notifications", url: "/notifications", icon: Bell },
@@ -56,30 +57,45 @@ export function AppSidebar() {
   const collapsed = state === "collapsed";
   const location = useLocation();
   const user = useAppStore((s) => s.user);
+  const pendingStudentCount = useAppStore((s) => s.pendingStudentCount);
 
   const isActive = (path: string) =>
     location.pathname === path || (path !== "/dashboard" && location.pathname.startsWith(path));
 
+  const getBadge = (url: string) =>
+    url === "/admin/pending" && pendingStudentCount > 0 ? pendingStudentCount : null;
+
   const renderItems = (items: typeof adminMain) =>
-    items.map((item) => (
-      <SidebarMenuItem key={item.title}>
-        <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={item.title}>
-          <NavLink
-            to={item.url}
-            className={({ isActive: a }) =>
-              `flex items-center gap-3 rounded-lg transition-colors ${
-                a || isActive(item.url)
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                  : "hover:bg-sidebar-accent/50"
-              }`
-            }
-          >
-            <item.icon className="h-4 w-4 shrink-0" />
-            {!collapsed && <span>{item.title}</span>}
-          </NavLink>
-        </SidebarMenuButton>
-      </SidebarMenuItem>
-    ));
+    items.map((item) => {
+      const badge = getBadge(item.url);
+      return (
+        <SidebarMenuItem key={item.title}>
+          <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={item.title}>
+            <NavLink
+              to={item.url}
+              className={({ isActive: a }) =>
+                `flex items-center gap-3 rounded-lg transition-colors ${
+                  a || isActive(item.url)
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                    : "hover:bg-sidebar-accent/50"
+                }`
+              }
+            >
+              <item.icon className="h-4 w-4 shrink-0" />
+              {!collapsed && <span className="flex-1">{item.title}</span>}
+              {!collapsed && badge !== null && (
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
+                  {badge}
+                </span>
+              )}
+              {collapsed && badge !== null && (
+                <span className="absolute top-0.5 right-0.5 h-2 w-2 rounded-full bg-destructive" />
+              )}
+            </NavLink>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      );
+    });
 
   const role = user?.role ?? "admin";
   const main = role === "student" ? studentMain : role === "professor" ? professorMain : adminMain;

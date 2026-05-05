@@ -1,4 +1,4 @@
-import { Bell, Moon, Sun, Search, LogOut, User as UserIcon } from "lucide-react";
+import { Bell, Moon, Sun, Search, LogOut, User as UserIcon, ArrowRight } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,7 +30,7 @@ export function TopNavbar() {
         <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label="Toggle theme">
           {theme === "light" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
         </Button>
-        <Popover>
+        {user?.role === "admin" && <Popover>
           <PopoverTrigger asChild>
             <Button variant="ghost" size="icon" className="relative" aria-label="Notifications">
               <Bell className="h-4 w-4" />
@@ -52,7 +52,10 @@ export function TopNavbar() {
               {notifications.slice(0, 6).map((n) => (
                 <button
                   key={n.id}
-                  onClick={() => markNotificationRead(n.id)}
+                  onClick={() => {
+                    markNotificationRead(n.id);
+                    if (n.link) navigate(n.link);
+                  }}
                   className={`w-full text-left p-3 border-b hover:bg-muted/50 transition ${!n.read ? "bg-accent/40" : ""}`}
                 >
                   <div className="flex items-start gap-2">
@@ -68,12 +71,15 @@ export function TopNavbar() {
                         {formatDistanceToNow(new Date(n.timestamp), { addSuffix: true })}
                       </p>
                     </div>
+                    {n.link && (
+                      <ArrowRight className="h-3.5 w-3.5 shrink-0 mt-1 text-muted-foreground" />
+                    )}
                   </div>
                 </button>
               ))}
             </div>
           </PopoverContent>
-        </Popover>
+        </Popover>}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="gap-2 px-2">
