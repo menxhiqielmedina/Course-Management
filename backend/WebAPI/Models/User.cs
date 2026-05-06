@@ -26,6 +26,8 @@ namespace WebAPI.Models
         [MaxLength(20)]
         public string Status { get; set; } = "approved";
 
+        public bool MustChangePassword { get; set; } = false;
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }

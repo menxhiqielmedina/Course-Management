@@ -65,15 +65,15 @@ const Signup = () => {
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 backdrop-blur">
             <GraduationCap className="h-6 w-6" />
           </div>
-          <span className="font-bold text-lg">Acadia CMS</span>
+          <span className="font-bold text-lg">EduTrack</span>
         </div>
         <div className="relative space-y-4">
-          <h1 className="text-5xl font-bold leading-tight">Join Acadia CMS today.</h1>
+          <h1 className="text-5xl font-bold leading-tight">Join EduTrack today.</h1>
           <p className="text-lg opacity-90 max-w-md">
             Register as a student to access your courses, assignments, and schedule — all in one place.
           </p>
         </div>
-        <div className="relative text-xs opacity-70">© 2025 Acadia University Platform</div>
+        <div className="relative text-xs opacity-70">© 2025 EduTrack Platform</div>
       </div>
 
       {/* Form side */}
@@ -83,7 +83,7 @@ const Signup = () => {
             <div className="flex h-9 w-9 items-center justify-center rounded-lg gradient-primary">
               <GraduationCap className="h-5 w-5 text-primary-foreground" />
             </div>
-            <span className="font-bold">Acadia CMS</span>
+            <span className="font-bold">EduTrack</span>
           </div>
 
           {submitted ? (

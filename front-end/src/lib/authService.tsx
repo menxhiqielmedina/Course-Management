@@ -8,6 +8,7 @@ export interface AuthResponse {
   email: string;
   role: "student" | "professor" | "admin";
   token: string;
+  mustChangePassword: boolean;
 }
 
 export interface LoginPayload {
@@ -30,4 +31,8 @@ export async function loginApi(payload: LoginPayload): Promise<AuthResponse> {
 export async function registerApi(payload: RegisterPayload): Promise<AuthResponse> {
   const { data } = await API.post<AuthResponse>("/auth/register", payload);
   return data;
+}
+
+export async function changePasswordApi(currentPassword: string, newPassword: string): Promise<void> {
+  await API.post("/auth/change-password", { currentPassword, newPassword });
 }

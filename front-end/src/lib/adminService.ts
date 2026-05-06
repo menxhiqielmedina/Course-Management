@@ -38,3 +38,20 @@ export const addProfessor = (payload: AddProfessorPayload): Promise<Professor> =
 
 export const getProfessors = (): Promise<Professor[]> =>
   api.get("/admin/professors").then((r) => r.data);
+
+export interface AdminStudent {
+  id: number;
+  fullName: string;
+  email: string;
+  status: string;
+  createdAt: string;
+}
+
+export const getAdminStudents = (): Promise<AdminStudent[]> =>
+  api.get("/admin/students").then((r) => r.data);
+
+export const updateUser = (id: number, payload: { fullName: string; email: string }): Promise<void> =>
+  api.put(`/admin/users/${id}`, payload);
+
+export const deleteUser = (id: number): Promise<void> =>
+  api.delete(`/admin/users/${id}`);

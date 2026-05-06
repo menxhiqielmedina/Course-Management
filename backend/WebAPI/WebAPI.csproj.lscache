@@ -56,16 +56,13 @@ TemporaryDependencyNodeTargetIdentifier=net8.0
 Controllers/
  AdminController.cs
  AuthController.cs
- StudentsController.cs
 Data/AppDbContext.cs
 DTOs/
  AdminDto.cs
  AuthDto.cs
- StudentDto.cs
 Interfaces/
  IAdminService.cs
  IAuthService.cs
- IStudentService.cs
 Migrations/
  20260420234938_InitialCreate.cs
  20260420234938_InitialCreate.Designer.cs
@@ -77,6 +74,7 @@ Migrations/
  20260504234826_AddUserStatus.Designer.cs
  AppDbContextModelSnapshot.cs
 Models/
+ Professor.cs
  Student.cs
  User.cs
 obj/Debug/net8.0/
@@ -87,7 +85,6 @@ Program.cs
 Services/
  AdminService.cs
  AuthService.cs
- StudentService.cs
 
 [metadataReferences]
 <DOTNET>/packs/Microsoft.AspNetCore.App.Ref/8.0.19/ref/net8.0/

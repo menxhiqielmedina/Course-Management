@@ -40,9 +40,15 @@ const Login = () => {
     setLoading(true);
     try {
       const res = await loginApi({ email: email.trim(), password });
-      loginFromApi(res.id, res.fullName, res.email, res.role, res.token);
+
+      if (res.role !== role) {
+        setErrors({ server: `This account is registered as a ${res.role}, not a ${role}. Please select the correct role.` });
+        return;
+      }
+
+      loginFromApi(res.id, res.fullName, res.email, res.role, res.token, res.mustChangePassword);
       toast({ title: "Welcome back!", description: `Signed in as ${res.role}.` });
-      navigate("/dashboard");
+      navigate(res.mustChangePassword ? "/change-password" : "/dashboard");
     } catch (err: unknown) {
       const e = err as { response?: { status?: number; data?: { message?: string } } };
       const msg = e?.response?.data?.message ?? "Invalid email or password.";
@@ -67,7 +73,7 @@ const Login = () => {
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 backdrop-blur">
             <GraduationCap className="h-6 w-6" />
           </div>
-          <span className="font-bold text-lg">Acadia CMS</span>
+          <span className="font-bold text-lg">EduTrack</span>
         </div>
         <div className="relative space-y-6">
           <h1 className="text-5xl font-bold leading-tight">
@@ -90,7 +96,7 @@ const Login = () => {
             ))}
           </div>
         </div>
-        <div className="relative text-xs opacity-70">© 2025 Acadia University Platform</div>
+        <div className="relative text-xs opacity-70">© 2025 EduTrack Platform</div>
       </div>
 
       {/* Form side */}
@@ -100,7 +106,7 @@ const Login = () => {
             <div className="flex h-9 w-9 items-center justify-center rounded-lg gradient-primary">
               <GraduationCap className="h-5 w-5 text-primary-foreground" />
             </div>
-            <span className="font-bold">Acadia CMS</span>
+            <span className="font-bold">EduTrack</span>
           </div>
 
           <div>

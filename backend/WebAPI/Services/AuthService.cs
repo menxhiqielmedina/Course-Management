@@ -48,6 +48,18 @@ namespace WebAPI.Services
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
 
+            if (role == "student")
+            {
+                _context.Students.Add(new Student
+                {
+                    UserId = user.Id,
+                    FullName = user.FullName,
+                    Email = user.Email,
+                    CreatedAt = user.CreatedAt
+                });
+                await _context.SaveChangesAsync();
+            }
+
             return MapToResponse(user);
         }
 
@@ -110,12 +122,27 @@ namespace WebAPI.Services
                 _ => "student"
             };
 
+        public async Task<bool> ChangePasswordAsync(int userId, ChangePasswordDto dto)
+        {
+            var user = await _context.Users.FindAsync(userId);
+            if (user == null) return false;
+
+            var result = _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, dto.CurrentPassword);
+            if (result == PasswordVerificationResult.Failed) return false;
+
+            user.PasswordHash = _passwordHasher.HashPassword(user, dto.NewPassword);
+            user.MustChangePassword = false;
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
         private AuthResponseDto MapToResponse(User user) => new()
         {
             Id = user.Id,
             FullName = user.FullName,
             Email = user.Email,
             Role = user.Role,
+            MustChangePassword = user.MustChangePassword,
             Token = GenerateJwtToken(user)
         };
     }

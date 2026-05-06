@@ -70,36 +70,111 @@ namespace WebAPI.Services
                 Email = email,
                 Role = "professor",
                 Status = "approved",
+                MustChangePassword = true,
                 CreatedAt = DateTime.UtcNow
             };
 
             user.PasswordHash = _passwordHasher.HashPassword(user, dto.Password);
-
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
 
-            return new ProfessorDto
+            var professor = new Professor
             {
-                Id = user.Id,
+                UserId = user.Id,
                 FullName = user.FullName,
                 Email = user.Email,
                 CreatedAt = user.CreatedAt
             };
+            _context.Professors.Add(professor);
+            await _context.SaveChangesAsync();
+
+            return new ProfessorDto { Id = professor.Id, FullName = professor.FullName, Email = professor.Email, CreatedAt = professor.CreatedAt };
         }
 
         public async Task<List<ProfessorDto>> GetProfessorsAsync()
         {
-            return await _context.Users
-                .Where(u => u.Role == "professor")
-                .OrderBy(u => u.FullName)
-                .Select(u => new ProfessorDto
+            return await _context.Professors
+                .OrderBy(p => p.FullName)
+                .Select(p => new ProfessorDto
                 {
-                    Id = u.Id,
-                    FullName = u.FullName,
-                    Email = u.Email,
-                    CreatedAt = u.CreatedAt
+                    Id = p.Id,
+                    FullName = p.FullName,
+                    Email = p.Email,
+                    CreatedAt = p.CreatedAt
                 })
                 .ToListAsync();
+        }
+
+        public async Task<List<StudentDto>> GetAllStudentsAsync()
+        {
+            return await _context.Students
+                .Include(s => s.User)
+                .OrderBy(s => s.FullName)
+                .Select(s => new StudentDto
+                {
+                    Id = s.Id,
+                    FullName = s.FullName,
+                    Email = s.Email,
+                    Status = s.User.Status,
+                    CreatedAt = s.CreatedAt
+                })
+                .ToListAsync();
+        }
+
+        public async Task<bool> UpdateUserAsync(int id, UpdateUserDto dto)
+        {
+            var email = dto.Email.Trim().ToLower();
+
+            // Try Students table first, then Professors
+            var student = await _context.Students.Include(s => s.User).FirstOrDefaultAsync(s => s.Id == id);
+            if (student != null)
+            {
+                var emailTaken = await _context.Users.AnyAsync(u => u.Email == email && u.Id != student.UserId);
+                if (emailTaken) return false;
+                student.FullName = dto.FullName.Trim();
+                student.Email = email;
+                student.User.FullName = dto.FullName.Trim();
+                student.User.Email = email;
+                await _context.SaveChangesAsync();
+                return true;
+            }
+
+            var professor = await _context.Professors.Include(p => p.User).FirstOrDefaultAsync(p => p.Id == id);
+            if (professor != null)
+            {
+                var emailTaken = await _context.Users.AnyAsync(u => u.Email == email && u.Id != professor.UserId);
+                if (emailTaken) return false;
+                professor.FullName = dto.FullName.Trim();
+                professor.Email = email;
+                professor.User.FullName = dto.FullName.Trim();
+                professor.User.Email = email;
+                await _context.SaveChangesAsync();
+                return true;
+            }
+
+            return false;
+        }
+
+        public async Task<bool> DeleteUserAsync(int id)
+        {
+            // Try Students table first, then Professors
+            var student = await _context.Students.Include(s => s.User).FirstOrDefaultAsync(s => s.Id == id);
+            if (student != null)
+            {
+                _context.Users.Remove(student.User); // cascade deletes the Student row too
+                await _context.SaveChangesAsync();
+                return true;
+            }
+
+            var professor = await _context.Professors.Include(p => p.User).FirstOrDefaultAsync(p => p.Id == id);
+            if (professor != null)
+            {
+                _context.Users.Remove(professor.User);
+                await _context.SaveChangesAsync();
+                return true;
+            }
+
+            return false;
         }
     }
 }

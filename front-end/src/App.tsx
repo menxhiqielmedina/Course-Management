@@ -26,6 +26,7 @@ const Audit = lazy(() => import("./pages/Audit"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Signup = lazy(() => import("./pages/Signup"));
 const PendingApprovals = lazy(() => import("./pages/admin/PendingApprovals"));
+const ChangePassword = lazy(() => import("./pages/ChangePassword"));
 
 
 const queryClient = new QueryClient();
@@ -48,6 +49,7 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/signup" element={<Signup />} />
+            <Route path="/change-password" element={<ChangePassword />} />
             <Route element={<AppLayout />}>
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/courses" element={<Courses />} />

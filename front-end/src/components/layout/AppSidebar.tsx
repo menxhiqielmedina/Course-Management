@@ -110,8 +110,8 @@ export function AppSidebar() {
           </div>
           {!collapsed && (
             <div className="flex flex-col">
-              <span className="text-sm font-bold">Acadia CMS</span>
-              <span className="text-[11px] text-muted-foreground">University Platform</span>
+              <span className="text-sm font-bold">EduTrack</span>
+              <span className="text-[11px] text-muted-foreground">Course Management</span>
             </div>
           )}
         </div>

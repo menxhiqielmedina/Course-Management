@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using WebAPI.DTOs;
 using WebAPI.Interfaces;
@@ -38,6 +40,24 @@ namespace WebAPI.Controllers
                 return StatusCode(403, new { message = result.ErrorMessage });
 
             return Unauthorized(new { message = result.ErrorMessage });
+        }
+
+        [HttpPost("change-password")]
+        [Authorize]
+        public async Task<IActionResult> ChangePassword(ChangePasswordDto dto)
+        {
+            var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier)
+                           ?? User.FindFirstValue("sub");
+
+            if (!int.TryParse(userIdClaim, out var userId))
+                return Unauthorized();
+
+            var success = await _authService.ChangePasswordAsync(userId, dto);
+
+            if (!success)
+                return BadRequest(new { message = "Current password is incorrect." });
+
+            return Ok(new { message = "Password changed successfully." });
         }
     }
 }

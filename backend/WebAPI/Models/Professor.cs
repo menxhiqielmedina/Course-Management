@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace WebAPI.Models
 {
-    public class Student
+    public class Professor
     {
         public int Id { get; set; }
 

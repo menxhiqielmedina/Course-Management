@@ -12,8 +12,10 @@ interface AppState {
   // Auth
   user: User | null;
   token: string | null;
+  mustChangePassword: boolean;
   login: (email: string, role: Role) => void;
-  loginFromApi: (id: number, fullName: string, email: string, role: Role, token: string) => void;
+  loginFromApi: (id: number, fullName: string, email: string, role: Role, token: string, mustChangePassword: boolean) => void;
+  clearMustChangePassword: () => void;
   logout: () => void;
 
   // Admin
@@ -67,14 +69,16 @@ export const useAppStore = create<AppState>()(
     (set) => ({
       user: null,
       token: null,
+      mustChangePassword: false,
       login: (email, role) => {
         const name = email.split("@")[0].replace(/\./g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
-        set({ user: { id: uid(), name: name || "User", email, role }, token: null });
+        set({ user: { id: uid(), name: name || "User", email, role }, token: null, mustChangePassword: false });
       },
-      loginFromApi: (id, fullName, email, role, token) => {
-        set({ user: { id: String(id), name: fullName, email, role }, token });
+      loginFromApi: (id, fullName, email, role, token, mustChangePassword) => {
+        set({ user: { id: String(id), name: fullName, email, role }, token, mustChangePassword });
       },
-      logout: () => set({ user: null, token: null }),
+      clearMustChangePassword: () => set({ mustChangePassword: false }),
+      logout: () => set({ user: null, token: null, mustChangePassword: false }),
 
       pendingStudentCount: 0,
       setPendingStudentCount: (n) => set({ pendingStudentCount: n }),
@@ -128,7 +132,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: "cms-app-store",
-      partialize: (s) => ({ user: s.user, token: s.token, theme: s.theme }),
+      partialize: (s) => ({ user: s.user, token: s.token, mustChangePassword: s.mustChangePassword, theme: s.theme }),
     }
   )
 );

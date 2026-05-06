@@ -35,7 +35,10 @@ export function AppLayout() {
       .catch(() => {});
   }, [user?.role]);
 
+  const mustChangePassword = useAppStore((s) => s.mustChangePassword);
+
   if (!user) return <Navigate to="/login" replace />;
+  if (mustChangePassword) return <Navigate to="/change-password" replace />;
 
   return (
     <SidebarProvider>

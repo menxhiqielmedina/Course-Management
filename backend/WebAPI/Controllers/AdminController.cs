@@ -62,5 +62,28 @@ namespace WebAPI.Controllers
             var professors = await _adminService.GetProfessorsAsync();
             return Ok(professors);
         }
+
+        [HttpGet("students")]
+        public async Task<IActionResult> GetAllStudents()
+        {
+            var students = await _adminService.GetAllStudentsAsync();
+            return Ok(students);
+        }
+
+        [HttpPut("users/{id}")]
+        public async Task<IActionResult> UpdateUser(int id, UpdateUserDto dto)
+        {
+            var success = await _adminService.UpdateUserAsync(id, dto);
+            if (!success) return BadRequest(new { message = "User not found or email already taken." });
+            return Ok(new { message = "User updated." });
+        }
+
+        [HttpDelete("users/{id}")]
+        public async Task<IActionResult> DeleteUser(int id)
+        {
+            var success = await _adminService.DeleteUserAsync(id);
+            if (!success) return NotFound(new { message = "User not found." });
+            return Ok(new { message = "User deleted." });
+        }
     }
 }
