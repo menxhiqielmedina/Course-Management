@@ -61,4 +61,18 @@ app.UseAuthorization();
 
 app.MapControllers();
 
+// TEMPORARY: Reset admin password on startup — remove after logging in
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<WebAPI.Data.AppDbContext>();
+    var admin = db.Users.FirstOrDefault(u => u.Role == "admin");
+    if (admin != null)
+    {
+        var hasher = new Microsoft.AspNetCore.Identity.PasswordHasher<WebAPI.Models.User>();
+        admin.PasswordHash = hasher.HashPassword(admin, "Admin@1234");
+        db.SaveChanges();
+        Console.WriteLine($"[TEMP] Admin email: {admin.Email} | Password reset to: Admin@1234");
+    }
+}
+
 app.Run();

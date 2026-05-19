@@ -50,8 +50,17 @@ export interface AdminStudent {
 export const getAdminStudents = (): Promise<AdminStudent[]> =>
   api.get("/admin/students").then((r) => r.data);
 
-export const updateUser = (id: number, payload: { fullName: string; email: string }): Promise<void> =>
-  api.put(`/admin/users/${id}`, payload);
+export const addStudent = (payload: { fullName: string; email: string; password: string }): Promise<AdminStudent> =>
+  api.post("/admin/students", payload).then((r) => r.data);
 
-export const deleteUser = (id: number): Promise<void> =>
-  api.delete(`/admin/users/${id}`);
+export const updateStudent = (id: number, payload: { fullName: string; email: string }): Promise<void> =>
+  api.put(`/admin/students/${id}`, payload);
+
+export const updateProfessor = (id: number, payload: { fullName: string; email: string }): Promise<void> =>
+  api.put(`/admin/professors/${id}`, payload);
+
+export const deleteStudent = (id: number): Promise<void> =>
+  api.delete(`/admin/students/${id}`);
+
+export const deleteProfessor = (id: number): Promise<void> =>
+  api.delete(`/admin/professors/${id}`);

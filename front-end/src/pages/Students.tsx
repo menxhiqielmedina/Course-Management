@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Search, Pencil, Trash2, Loader2 } from "lucide-react";
+import { Search, Pencil, Trash2, Loader2, UserPlus } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
 import { useAppStore } from "@/store/useAppStore";
-import { getAdminStudents, updateUser, deleteUser, type AdminStudent } from "@/lib/adminService";
+import { getAdminStudents, addStudent, updateStudent, deleteStudent, type AdminStudent } from "@/lib/adminService";
 
 const statusColor: Record<string, string> = {
   approved: "bg-green-100 text-green-700 border-green-300",
@@ -26,6 +26,14 @@ const Students = () => {
   const [students, setStudents] = useState<AdminStudent[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+
+  // Add state
+  const [addOpen, setAddOpen] = useState(false);
+  const [addName, setAddName] = useState("");
+  const [addEmail, setAddEmail] = useState("");
+  const [addPassword, setAddPassword] = useState("");
+  const [addErrors, setAddErrors] = useState<{ name?: string; email?: string; password?: string; server?: string }>({});
+  const [addLoading, setAddLoading] = useState(false);
 
   // Edit state
   const [editTarget, setEditTarget] = useState<AdminStudent | null>(null);
@@ -59,6 +67,34 @@ const Students = () => {
     [students, search]
   );
 
+  const validateAdd = () => {
+    const errs: typeof addErrors = {};
+    if (!addName.trim()) errs.name = "Name is required";
+    if (!addEmail.includes("@")) errs.email = "Enter a valid email";
+    if (addPassword.length < 6) errs.password = "At least 6 characters";
+    return errs;
+  };
+
+  const handleAdd = async () => {
+    const errs = validateAdd();
+    setAddErrors(errs);
+    if (Object.keys(errs).length) return;
+
+    setAddLoading(true);
+    try {
+      const newStudent = await addStudent({ fullName: addName.trim(), email: addEmail.trim(), password: addPassword });
+      setStudents((prev) => [...prev, newStudent]);
+      toast({ title: "Student added", description: `${newStudent.fullName} can now sign in.` });
+      setAddOpen(false);
+      setAddName(""); setAddEmail(""); setAddPassword("");
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Failed to add student.";
+      setAddErrors({ server: msg });
+    } finally {
+      setAddLoading(false);
+    }
+  };
+
   const openEdit = (s: AdminStudent) => {
     setEditTarget(s);
     setEditName(s.fullName);
@@ -73,7 +109,7 @@ const Students = () => {
 
     setEditLoading(true);
     try {
-      await updateUser(editTarget.id, { fullName: editName.trim(), email: editEmail.trim() });
+      await updateStudent(editTarget.id, { fullName: editName.trim(), email: editEmail.trim() });
       setStudents((prev) =>
         prev.map((s) => s.id === editTarget.id ? { ...s, fullName: editName.trim(), email: editEmail.trim() } : s)
       );
@@ -90,7 +126,7 @@ const Students = () => {
     if (!deleteTarget) return;
     setDeleteLoading(true);
     try {
-      await deleteUser(deleteTarget.id);
+      await deleteStudent(deleteTarget.id);
       setStudents((prev) => prev.filter((s) => s.id !== deleteTarget.id));
       toast({ title: "Deleted", description: `${deleteTarget.fullName} has been removed.` });
       setDeleteTarget(null);
@@ -103,7 +139,13 @@ const Students = () => {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Students" description={`${filtered.length} students`} />
+      <PageHeader title="Students" description={`${filtered.length} students`}>
+        {isAdmin && (
+          <Button onClick={() => setAddOpen(true)} className="gap-2">
+            <UserPlus className="h-4 w-4" /> Add Student
+          </Button>
+        )}
+      </PageHeader>
 
       <Card>
         <CardContent className="p-4">
@@ -177,6 +219,40 @@ const Students = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Add Student Dialog */}
+      <Dialog open={addOpen} onOpenChange={(o) => { if (!o) { setAddOpen(false); setAddErrors({}); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add student</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Full Name</Label>
+              <Input value={addName} onChange={(e) => setAddName(e.target.value)} placeholder="Jane Doe" disabled={addLoading} />
+              {addErrors.name && <p className="text-xs text-destructive">{addErrors.name}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label>Email</Label>
+              <Input type="email" value={addEmail} onChange={(e) => setAddEmail(e.target.value)} placeholder="student@university.edu" disabled={addLoading} />
+              {addErrors.email && <p className="text-xs text-destructive">{addErrors.email}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label>Temporary Password</Label>
+              <Input type="password" value={addPassword} onChange={(e) => setAddPassword(e.target.value)} placeholder="Min. 6 characters" disabled={addLoading} />
+              {addErrors.password && <p className="text-xs text-destructive">{addErrors.password}</p>}
+            </div>
+            {addErrors.server && <p className="text-xs text-destructive bg-destructive/10 rounded-md px-3 py-2">{addErrors.server}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddOpen(false)} disabled={addLoading}>Cancel</Button>
+            <Button onClick={handleAdd} disabled={addLoading}>
+              {addLoading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Add student
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Dialog */}
       <Dialog open={!!editTarget} onOpenChange={(o) => { if (!o) setEditTarget(null); }}>

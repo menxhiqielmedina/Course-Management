@@ -63,6 +63,15 @@ namespace WebAPI.Controllers
             return Ok(professors);
         }
 
+        [HttpPost("students")]
+        public async Task<IActionResult> AddStudent(AddStudentDto dto)
+        {
+            var student = await _adminService.AddStudentAsync(dto);
+            if (student == null)
+                return BadRequest(new { message = "Email already exists." });
+            return Ok(student);
+        }
+
         [HttpGet("students")]
         public async Task<IActionResult> GetAllStudents()
         {
@@ -70,20 +79,36 @@ namespace WebAPI.Controllers
             return Ok(students);
         }
 
-        [HttpPut("users/{id}")]
-        public async Task<IActionResult> UpdateUser(int id, UpdateUserDto dto)
+        [HttpPut("students/{id}")]
+        public async Task<IActionResult> UpdateStudent(int id, UpdateUserDto dto)
         {
-            var success = await _adminService.UpdateUserAsync(id, dto);
-            if (!success) return BadRequest(new { message = "User not found or email already taken." });
-            return Ok(new { message = "User updated." });
+            var success = await _adminService.UpdateStudentAsync(id, dto);
+            if (!success) return BadRequest(new { message = "Student not found or email already taken." });
+            return Ok(new { message = "Student updated." });
         }
 
-        [HttpDelete("users/{id}")]
-        public async Task<IActionResult> DeleteUser(int id)
+        [HttpPut("professors/{id}")]
+        public async Task<IActionResult> UpdateProfessor(int id, UpdateUserDto dto)
         {
-            var success = await _adminService.DeleteUserAsync(id);
-            if (!success) return NotFound(new { message = "User not found." });
-            return Ok(new { message = "User deleted." });
+            var success = await _adminService.UpdateProfessorAsync(id, dto);
+            if (!success) return BadRequest(new { message = "Professor not found or email already taken." });
+            return Ok(new { message = "Professor updated." });
+        }
+
+        [HttpDelete("students/{id}")]
+        public async Task<IActionResult> DeleteStudent(int id)
+        {
+            var success = await _adminService.DeleteStudentAsync(id);
+            if (!success) return NotFound(new { message = "Student not found." });
+            return Ok(new { message = "Student deleted." });
+        }
+
+        [HttpDelete("professors/{id}")]
+        public async Task<IActionResult> DeleteProfessor(int id)
+        {
+            var success = await _adminService.DeleteProfessorAsync(id);
+            if (!success) return NotFound(new { message = "Professor not found." });
+            return Ok(new { message = "Professor deleted." });
         }
     }
 }

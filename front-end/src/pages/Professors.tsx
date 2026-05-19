@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
 import { useAppStore } from "@/store/useAppStore";
-import { getProfessors, addProfessor, updateUser, deleteUser, type Professor } from "@/lib/adminService";
+import { getProfessors, addProfessor, updateProfessor, deleteProfessor, type Professor } from "@/lib/adminService";
 
 const Professors = () => {
   const role = useAppStore((s) => s.user?.role);
@@ -104,7 +104,7 @@ const Professors = () => {
 
     setEditLoading(true);
     try {
-      await updateUser(editTarget.id, { fullName: editName.trim(), email: editEmail.trim() });
+      await updateProfessor(editTarget.id, { fullName: editName.trim(), email: editEmail.trim() });
       setProfessors((prev) =>
         prev.map((p) => p.id === editTarget.id ? { ...p, fullName: editName.trim(), email: editEmail.trim() } : p)
       );
@@ -122,7 +122,7 @@ const Professors = () => {
     if (!deleteTarget) return;
     setDeleteLoading(true);
     try {
-      await deleteUser(deleteTarget.id);
+      await deleteProfessor(deleteTarget.id);
       setProfessors((prev) => prev.filter((p) => p.id !== deleteTarget.id));
       toast({ title: "Deleted", description: `${deleteTarget.fullName} has been removed.` });
       setDeleteTarget(null);
