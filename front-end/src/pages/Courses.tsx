@@ -1,6 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Search, Download, Upload, Edit, Trash2, BookOpen } from "lucide-react";
+import { Plus, Search, Edit, BookOpen, Loader2 } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { Button } from "@/components/ui/button";
@@ -13,18 +13,40 @@ import {
 import { useAppStore } from "@/store/useAppStore";
 import { CourseFormDialog } from "@/components/courses/CourseFormDialog";
 import { toast } from "@/hooks/use-toast";
-import type { Course } from "@/data/mockData";
+import { getCoursesApi, updateCourseStatusApi, type CourseResponse } from "@/lib/courseService";
+
+const COURSE_COLORS = [
+  "230 75% 56%", "160 60% 45%", "280 65% 55%",
+  "25 90% 55%", "340 70% 55%", "190 70% 45%",
+];
+
+const courseColor = (id: number) => COURSE_COLORS[id % COURSE_COLORS.length];
 
 const Courses = () => {
   const navigate = useNavigate();
-  const { courses, professors, deleteCourse, user } = useAppStore();
+  const { user } = useAppStore();
+  const [courses, setCourses] = useState<CourseResponse[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [dept, setDept] = useState("all");
   const [status, setStatus] = useState("all");
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<Course | null>(null);
+  const [editing, setEditing] = useState<CourseResponse | null>(null);
 
   const isAdmin = user?.role === "admin";
+
+  const loadCourses = async () => {
+    try {
+      const data = await getCoursesApi();
+      setCourses(data);
+    } catch {
+      toast({ title: "Failed to load courses", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadCourses(); }, []);
 
   const filtered = useMemo(() => {
     return courses.filter((c) => {
@@ -35,20 +57,36 @@ const Courses = () => {
     });
   }, [courses, search, dept, status]);
 
-  const handleDelete = (c: Course) => {
-    deleteCourse(c.id);
-    toast({ title: "Course deleted", description: `${c.code} removed.` });
+  const handleArchive = async (c: CourseResponse, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newStatus = c.status === "archived" ? "active" : "archived";
+    try {
+      await updateCourseStatusApi(c.id, newStatus);
+      setCourses((prev) => prev.map((x) => x.id === c.id ? { ...x, status: newStatus } : x));
+      toast({ title: `Course ${newStatus}` });
+    } catch {
+      toast({ title: "Failed to update status", variant: "destructive" });
+    }
   };
+
+  const handleSaved = (saved: CourseResponse) => {
+    setCourses((prev) => {
+      const exists = prev.find((c) => c.id === saved.id);
+      return exists ? prev.map((c) => c.id === saved.id ? saved : c) : [saved, ...prev];
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <PageHeader title="Courses" description={`${filtered.length} courses in catalog`}>
-        <Button variant="outline" size="sm" onClick={() => toast({ title: "Imported (simulated)" })}>
-          <Upload className="h-4 w-4 mr-1" /> Import
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => toast({ title: "Exported (simulated)" })}>
-          <Download className="h-4 w-4 mr-1" /> Export
-        </Button>
         {isAdmin && (
           <Button size="sm" className="gradient-primary text-primary-foreground" onClick={() => { setEditing(null); setOpen(true); }}>
             <Plus className="h-4 w-4 mr-1" /> New course
@@ -88,11 +126,10 @@ const Courses = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((c) => {
-            const prof = professors.find((p) => p.id === c.professorId);
-            const pct = Math.round((c.studentsEnrolled / c.capacity) * 100);
+            const pct = c.capacity > 0 ? Math.round((c.enrolledCount / c.capacity) * 100) : 0;
             return (
               <Card key={c.id} className="overflow-hidden group hover:shadow-elegant hover:-translate-y-0.5 transition cursor-pointer" onClick={() => navigate(`/courses/${c.id}`)}>
-                <div className="h-2" style={{ background: `hsl(${c.color})` }} />
+                <div className="h-2" style={{ background: `hsl(${courseColor(c.id)})` }} />
                 <CardContent className="p-5 space-y-3">
                   <div className="flex items-start justify-between">
                     <div>
@@ -105,16 +142,16 @@ const Courses = () => {
                   </div>
                   <p className="text-xs text-muted-foreground line-clamp-2">{c.description}</p>
                   <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t">
-                    <span>{prof?.name ?? "—"}</span>
+                    <span>{c.professorName ?? "—"}</span>
                     <span>{c.credits} cr · {pct}% full</span>
                   </div>
                   {isAdmin && (
                     <div className="flex gap-2 pt-2 opacity-0 group-hover:opacity-100 transition" onClick={(e) => e.stopPropagation()}>
-                      <Button variant="outline" size="sm" className="flex-1" onClick={() => { setEditing(c); setOpen(true); }}>
+                      <Button variant="outline" size="sm" className="flex-1" onClick={(e) => { e.stopPropagation(); setEditing(c); setOpen(true); }}>
                         <Edit className="h-3.5 w-3.5 mr-1" /> Edit
                       </Button>
-                      <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => handleDelete(c)}>
-                        <Trash2 className="h-3.5 w-3.5" />
+                      <Button variant="outline" size="sm" className="text-muted-foreground" onClick={(e) => handleArchive(c, e)}>
+                        {c.status === "archived" ? "Activate" : "Archive"}
                       </Button>
                     </div>
                   )}
@@ -125,7 +162,7 @@ const Courses = () => {
         </div>
       )}
 
-      <CourseFormDialog open={open} onOpenChange={setOpen} course={editing} />
+      <CourseFormDialog open={open} onOpenChange={setOpen} course={editing} onSaved={handleSaved} />
     </div>
   );
 };

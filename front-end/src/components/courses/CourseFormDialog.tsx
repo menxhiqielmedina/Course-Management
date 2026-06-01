@@ -10,32 +10,58 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { useAppStore } from "@/store/useAppStore";
 import { toast } from "@/hooks/use-toast";
-import type { Course } from "@/data/mockData";
+import { createCourseApi, updateCourseApi, type CourseResponse } from "@/lib/courseService";
+import api from "@/lib/api";
+import { Loader2 } from "lucide-react";
+
+interface Professor {
+  id: number;
+  fullName: string;
+}
 
 interface Props {
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  course?: Course | null;
+  course?: CourseResponse | null;
+  onSaved: (course: CourseResponse) => void;
 }
 
-const empty: Omit<Course, "id"> = {
-  code: "", title: "", description: "", credits: 3, department: "Computer Science",
-  professorId: "p1", studentsEnrolled: 0, capacity: 50, semester: "Fall 2025",
-  status: "draft", color: "230 75% 56%",
+const DEPARTMENTS = ["Computer Science", "Mathematics", "Physics", "Engineering"];
+const SEMESTERS = ["Fall 2025", "Spring 2026", "Summer 2026", "Fall 2026"];
+
+const emptyForm = {
+  code: "", title: "", description: "", credits: 3,
+  department: "Computer Science", professorId: null as number | null,
+  capacity: 50, semester: "Fall 2025", status: "draft",
 };
 
-export function CourseFormDialog({ open, onOpenChange, course }: Props) {
-  const { addCourse, updateCourse, professors } = useAppStore();
-  const [form, setForm] = useState<Omit<Course, "id">>(empty);
+export function CourseFormDialog({ open, onOpenChange, course, onSaved }: Props) {
+  const [form, setForm] = useState(emptyForm);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [professors, setProfessors] = useState<Professor[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    api.get<Professor[]>("/admin/professors").then((r) => setProfessors(r.data)).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (course) {
-      const { id, ...rest } = course;
-      setForm(rest);
-    } else setForm(empty);
+      setForm({
+        code: course.code,
+        title: course.title,
+        description: course.description,
+        credits: course.credits,
+        department: course.department,
+        professorId: course.professorId,
+        capacity: course.capacity,
+        semester: course.semester,
+        status: course.status,
+      });
+    } else {
+      setForm(emptyForm);
+    }
     setErrors({});
   }, [course, open]);
 
@@ -49,16 +75,22 @@ export function CourseFormDialog({ open, onOpenChange, course }: Props) {
     return Object.keys(e).length === 0;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!validate()) return;
-    if (course) {
-      updateCourse(course.id, form);
-      toast({ title: "Course updated", description: `${form.code} saved successfully.` });
-    } else {
-      addCourse(form);
-      toast({ title: "Course created", description: `${form.code} added to catalog.` });
+    setLoading(true);
+    try {
+      const saved = course
+        ? await updateCourseApi(course.id, form)
+        : await createCourseApi(form);
+      toast({ title: course ? "Course updated" : "Course created", description: `${saved.code} saved successfully.` });
+      onSaved(saved);
+      onOpenChange(false);
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      toast({ title: "Error", description: e?.response?.data?.message ?? "Something went wrong.", variant: "destructive" });
+    } finally {
+      setLoading(false);
     }
-    onOpenChange(false);
   };
 
   return (
@@ -96,41 +128,40 @@ export function CourseFormDialog({ open, onOpenChange, course }: Props) {
             <Select value={form.department} onValueChange={(v) => setForm({ ...form, department: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {["Computer Science", "Mathematics", "Physics", "Engineering"].map((d) => (
-                  <SelectItem key={d} value={d}>{d}</SelectItem>
-                ))}
+                {DEPARTMENTS.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
             <Label>Professor</Label>
-            <Select value={form.professorId} onValueChange={(v) => setForm({ ...form, professorId: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+            <Select
+              value={form.professorId != null ? String(form.professorId) : "none"}
+              onValueChange={(v) => setForm({ ...form, professorId: v === "none" ? null : +v })}
+            >
+              <SelectTrigger><SelectValue placeholder="Select professor" /></SelectTrigger>
               <SelectContent>
-                {professors.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                ))}
+                <SelectItem value="none">— None —</SelectItem>
+                {professors.map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.fullName}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="capacity">Capacity *</Label>
             <Input id="capacity" type="number" min={1} value={form.capacity} onChange={(e) => setForm({ ...form, capacity: +e.target.value })} />
+            {errors.capacity && <p className="text-xs text-destructive">{errors.capacity}</p>}
           </div>
           <div className="space-y-1.5">
             <Label>Semester</Label>
             <Select value={form.semester} onValueChange={(v) => setForm({ ...form, semester: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {["Fall 2025", "Spring 2026", "Summer 2026"].map((s) => (
-                  <SelectItem key={s} value={s}>{s}</SelectItem>
-                ))}
+                {SEMESTERS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div className="col-span-2 space-y-1.5">
             <Label>Status</Label>
-            <Select value={form.status} onValueChange={(v: Course["status"]) => setForm({ ...form, status: v })}>
+            <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="draft">Draft</SelectItem>
@@ -143,7 +174,8 @@ export function CourseFormDialog({ open, onOpenChange, course }: Props) {
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSubmit} className="gradient-primary text-primary-foreground">
+          <Button onClick={handleSubmit} disabled={loading} className="gradient-primary text-primary-foreground">
+            {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
             {course ? "Save changes" : "Create course"}
           </Button>
         </DialogFooter>
