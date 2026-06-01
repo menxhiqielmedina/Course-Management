@@ -61,14 +61,30 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-// TEMPORARY: Reset admin password on startup — remove after logging in
+// TEMPORARY: Seed admin if none exists — remove after logging in
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<WebAPI.Data.AppDbContext>();
+    var hasher = new Microsoft.AspNetCore.Identity.PasswordHasher<WebAPI.Models.User>();
     var admin = db.Users.FirstOrDefault(u => u.Role == "admin");
-    if (admin != null)
+    if (admin == null)
     {
-        var hasher = new Microsoft.AspNetCore.Identity.PasswordHasher<WebAPI.Models.User>();
+        admin = new WebAPI.Models.User
+        {
+            FullName = "Admin",
+            Email = "admin@university.edu",
+            Role = "admin",
+            Status = "approved",
+            MustChangePassword = false,
+            CreatedAt = DateTime.UtcNow
+        };
+        admin.PasswordHash = hasher.HashPassword(admin, "Admin@1234");
+        db.Users.Add(admin);
+        db.SaveChanges();
+        Console.WriteLine("[TEMP] Admin created — Email: admin@university.edu | Password: Admin@1234");
+    }
+    else
+    {
         admin.PasswordHash = hasher.HashPassword(admin, "Admin@1234");
         db.SaveChanges();
         Console.WriteLine($"[TEMP] Admin email: {admin.Email} | Password reset to: Admin@1234");
