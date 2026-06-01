@@ -10,6 +10,8 @@ namespace WebAPI.Data
         public DbSet<User> Users { get; set; }
         public DbSet<Student> Students { get; set; }
         public DbSet<Professor> Professors { get; set; }
+        public DbSet<Course> Courses { get; set; }
+        public DbSet<CourseStudent> CourseStudents { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -38,6 +40,31 @@ namespace WebAPI.Data
             modelBuilder.Entity<Professor>()
                 .HasIndex(p => p.UserId)
                 .IsUnique();
+
+            modelBuilder.Entity<Course>()
+                .HasIndex(c => new { c.Code, c.Semester })
+                .IsUnique();
+
+            modelBuilder.Entity<Course>()
+                .HasOne(c => c.Professor)
+                .WithMany()
+                .HasForeignKey(c => c.ProfessorId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<CourseStudent>()
+                .HasKey(cs => new { cs.CourseId, cs.StudentId });
+
+            modelBuilder.Entity<CourseStudent>()
+                .HasOne(cs => cs.Course)
+                .WithMany(c => c.CourseStudents)
+                .HasForeignKey(cs => cs.CourseId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<CourseStudent>()
+                .HasOne(cs => cs.Student)
+                .WithMany()
+                .HasForeignKey(cs => cs.StudentId)
+                .OnDelete(DeleteBehavior.Cascade);
         }
     }
 }
