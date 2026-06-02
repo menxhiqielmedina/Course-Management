@@ -4,7 +4,7 @@ namespace WebAPI.Interfaces
 {
     public interface ICourseService
     {
-        Task<List<CourseResponseDto>> GetAllAsync(string? search, string? status, string? department);
+        Task<List<CourseResponseDto>> GetAllAsync(string? search, string? status, string? department, int? userId = null, string? role = null);
         Task<CourseResponseDto?> GetByIdAsync(int id);
         Task<(CourseResponseDto? course, string? error)> CreateAsync(CreateCourseDto dto);
         Task<(CourseResponseDto? course, string? error)> UpdateAsync(int id, UpdateCourseDto dto);

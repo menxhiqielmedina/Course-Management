@@ -12,6 +12,8 @@ namespace WebAPI.Data
         public DbSet<Professor> Professors { get; set; }
         public DbSet<Course> Courses { get; set; }
         public DbSet<CourseStudent> CourseStudents { get; set; }
+        public DbSet<Assignment> Assignments { get; set; }
+        public DbSet<AssignmentSubmission> AssignmentSubmissions { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -65,6 +67,44 @@ namespace WebAPI.Data
                 .WithMany()
                 .HasForeignKey(cs => cs.StudentId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Assignment>()
+                .HasOne(a => a.Course)
+                .WithMany()
+                .HasForeignKey(a => a.CourseId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Assignment>()
+                .HasOne(a => a.CreatedBy)
+                .WithMany()
+                .HasForeignKey(a => a.CreatedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<AssignmentSubmission>()
+                .HasIndex(s => new { s.AssignmentId, s.StudentId })
+                .IsUnique();
+
+            modelBuilder.Entity<AssignmentSubmission>()
+                .Property(s => s.GradePoints)
+                .HasPrecision(6, 2);
+
+            modelBuilder.Entity<AssignmentSubmission>()
+                .HasOne(s => s.Assignment)
+                .WithMany(a => a.Submissions)
+                .HasForeignKey(s => s.AssignmentId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<AssignmentSubmission>()
+                .HasOne(s => s.Student)
+                .WithMany()
+                .HasForeignKey(s => s.StudentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<AssignmentSubmission>()
+                .HasOne(s => s.GradedBy)
+                .WithMany()
+                .HasForeignKey(s => s.GradedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
         }
     }
 }

@@ -117,12 +117,13 @@ namespace WebAPI.Services
                 UserId = user.Id,
                 FullName = user.FullName,
                 Email = user.Email,
+                Department = dto.Department.Trim(),
                 CreatedAt = user.CreatedAt
             };
             _context.Professors.Add(professor);
             await _context.SaveChangesAsync();
 
-            return new ProfessorDto { Id = professor.Id, FullName = professor.FullName, Email = professor.Email, CreatedAt = professor.CreatedAt };
+            return new ProfessorDto { Id = professor.Id, FullName = professor.FullName, Email = professor.Email, Department = professor.Department, CreatedAt = professor.CreatedAt };
         }
 
         public async Task<List<ProfessorDto>> GetProfessorsAsync()
@@ -134,6 +135,7 @@ namespace WebAPI.Services
                     Id = p.Id,
                     FullName = p.FullName,
                     Email = p.Email,
+                    Department = p.Department,
                     CreatedAt = p.CreatedAt
                 })
                 .ToListAsync();

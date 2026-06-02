@@ -15,12 +15,19 @@ namespace WebAPI.Services
             _context = context;
         }
 
-        public async Task<List<CourseResponseDto>> GetAllAsync(string? search, string? status, string? department)
+        public async Task<List<CourseResponseDto>> GetAllAsync(string? search, string? status, string? department, int? userId = null, string? role = null)
         {
             var query = _context.Courses
                 .Include(c => c.Professor)
                 .Include(c => c.CourseStudents)
                 .AsQueryable();
+
+            if (role == "professor" && userId.HasValue)
+            {
+                var professor = await _context.Professors.FirstOrDefaultAsync(p => p.UserId == userId.Value);
+                if (professor != null && !string.IsNullOrWhiteSpace(professor.Department))
+                    query = query.Where(c => c.Department == professor.Department);
+            }
 
             if (!string.IsNullOrWhiteSpace(search))
                 query = query.Where(c =>
