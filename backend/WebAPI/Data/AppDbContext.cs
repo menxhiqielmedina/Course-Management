@@ -14,6 +14,7 @@ namespace WebAPI.Data
         public DbSet<CourseStudent> CourseStudents { get; set; }
         public DbSet<Assignment> Assignments { get; set; }
         public DbSet<AssignmentSubmission> AssignmentSubmissions { get; set; }
+        public DbSet<FileResource> FileResources { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -105,6 +106,18 @@ namespace WebAPI.Data
                 .WithMany()
                 .HasForeignKey(s => s.GradedByUserId)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<FileResource>()
+                .HasOne(f => f.Course)
+                .WithMany()
+                .HasForeignKey(f => f.CourseId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<FileResource>()
+                .HasOne(f => f.UploadedBy)
+                .WithMany()
+                .HasForeignKey(f => f.UploadedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
     }
 }
