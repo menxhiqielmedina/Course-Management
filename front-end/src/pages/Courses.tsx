@@ -34,6 +34,7 @@ const Courses = () => {
   const [editing, setEditing] = useState<CourseResponse | null>(null);
 
   const isAdmin = user?.role === "admin";
+  const isProfessor = user?.role === "professor";
 
   const loadCourses = async () => {
     try {
@@ -112,15 +113,17 @@ const Courses = () => {
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by code or title..." className="pl-9" />
           </div>
-          <Select value={dept} onValueChange={setDept}>
-            <SelectTrigger className="w-full md:w-48"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All departments</SelectItem>
-              {["Computer Science", "Mathematics", "Physics", "Engineering"].map((d) => (
-                <SelectItem key={d} value={d}>{d}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {!isProfessor && (
+            <Select value={dept} onValueChange={setDept}>
+              <SelectTrigger className="w-full md:w-48"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All departments</SelectItem>
+                {["Computer Science", "Mathematics", "Physics", "Engineering"].map((d) => (
+                  <SelectItem key={d} value={d}>{d}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <Select value={status} onValueChange={setStatus}>
             <SelectTrigger className="w-full md:w-36"><SelectValue /></SelectTrigger>
             <SelectContent>

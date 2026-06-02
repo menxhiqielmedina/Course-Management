@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 using WebAPI.DTOs;
 using WebAPI.Interfaces;
 
@@ -23,7 +24,9 @@ namespace WebAPI.Controllers
             [FromQuery] string? status,
             [FromQuery] string? department)
         {
-            var courses = await _courseService.GetAllAsync(search, status, department);
+            var userId = int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? (int?)id : null;
+            var role = User.FindFirstValue(ClaimTypes.Role);
+            var courses = await _courseService.GetAllAsync(search, status, department, userId, role);
             return Ok(courses);
         }
 

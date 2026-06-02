@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { Search, Pencil, Trash2, Loader2, UserPlus } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +26,7 @@ const Professors = () => {
   const [addName, setAddName] = useState("");
   const [addEmail, setAddEmail] = useState("");
   const [addPassword, setAddPassword] = useState("");
+  const [addDepartment, setAddDepartment] = useState("Computer Science");
   const [addErrors, setAddErrors] = useState<{ name?: string; email?: string; password?: string; server?: string }>({});
   const [addLoading, setAddLoading] = useState(false);
 
@@ -76,11 +78,11 @@ const Professors = () => {
 
     setAddLoading(true);
     try {
-      const newProf = await addProfessor({ fullName: addName.trim(), email: addEmail.trim(), password: addPassword });
+      const newProf = await addProfessor({ fullName: addName.trim(), email: addEmail.trim(), password: addPassword, department: addDepartment });
       setProfessors((prev) => [...prev, newProf]);
       toast({ title: "Professor added", description: `${newProf.fullName} can now sign in.` });
       setAddOpen(false);
-      setAddName(""); setAddEmail(""); setAddPassword("");
+      setAddName(""); setAddEmail(""); setAddPassword(""); setAddDepartment("Computer Science");
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Failed to add professor.";
       setAddErrors({ server: msg });
@@ -171,6 +173,7 @@ const Professors = () => {
                 <TableRow>
                   <TableHead>Professor</TableHead>
                   <TableHead>Email</TableHead>
+                  <TableHead>Department</TableHead>
                   <TableHead>Added</TableHead>
                   {isAdmin && <TableHead className="text-right">Actions</TableHead>}
                 </TableRow>
@@ -187,6 +190,7 @@ const Professors = () => {
                       </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">{p.email}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{p.department || "—"}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {new Date(p.createdAt).toLocaleDateString()}
                     </TableCell>
@@ -231,6 +235,17 @@ const Professors = () => {
               <Label>Temporary Password</Label>
               <Input type="password" value={addPassword} onChange={(e) => setAddPassword(e.target.value)} placeholder="Min. 6 characters" disabled={addLoading} />
               {addErrors.password && <p className="text-xs text-destructive">{addErrors.password}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label>Department</Label>
+              <Select value={addDepartment} onValueChange={setAddDepartment} disabled={addLoading}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {["Computer Science", "Mathematics", "Physics", "Engineering"].map((d) => (
+                    <SelectItem key={d} value={d}>{d}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             {addErrors.server && <p className="text-xs text-destructive bg-destructive/10 rounded-md px-3 py-2">{addErrors.server}</p>}
           </div>

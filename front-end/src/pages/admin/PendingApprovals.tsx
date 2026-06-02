@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import {
   getPendingStudents,
@@ -25,6 +26,7 @@ const PendingApprovals = () => {
   const [profName, setProfName] = useState("");
   const [profEmail, setProfEmail] = useState("");
   const [profPassword, setProfPassword] = useState("");
+  const [profDepartment, setProfDepartment] = useState("Computer Science");
   const [profErrors, setProfErrors] = useState<{ name?: string; email?: string; password?: string; server?: string }>({});
   const [addingProf, setAddingProf] = useState(false);
 
@@ -95,11 +97,12 @@ const PendingApprovals = () => {
 
     setAddingProf(true);
     try {
-      await addProfessor({ fullName: profName.trim(), email: profEmail.trim(), password: profPassword });
+      await addProfessor({ fullName: profName.trim(), email: profEmail.trim(), password: profPassword, department: profDepartment });
       toast({ title: "Professor added", description: `${profName} can now sign in.` });
       setProfName("");
       setProfEmail("");
       setProfPassword("");
+      setProfDepartment("Computer Science");
       setProfErrors({});
     } catch (err: unknown) {
       const msg =
@@ -240,6 +243,18 @@ const PendingApprovals = () => {
                 disabled={addingProf}
               />
               {profErrors.password && <p className="text-xs text-destructive">{profErrors.password}</p>}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Department</Label>
+              <Select value={profDepartment} onValueChange={setProfDepartment} disabled={addingProf}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {["Computer Science", "Mathematics", "Physics", "Engineering"].map((d) => (
+                    <SelectItem key={d} value={d}>{d}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {profErrors.server && (

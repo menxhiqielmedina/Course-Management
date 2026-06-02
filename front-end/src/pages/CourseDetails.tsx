@@ -21,6 +21,7 @@ import {
   getCourseApi, getEnrolledStudentsApi, enrollStudentApi, removeStudentApi,
   type CourseResponse, type EnrolledStudent,
 } from "@/lib/courseService";
+import { getAssignmentsApi, type AssignmentResponse } from "@/lib/assignmentService";
 import api from "@/lib/api";
 
 const COURSE_COLORS = [
@@ -34,11 +35,12 @@ interface StudentOption { id: number; fullName: string; email: string; }
 const CourseDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user, assignments, files } = useAppStore();
+  const { user, files } = useAppStore();
   const isAdmin = user?.role === "admin";
 
   const [course, setCourse] = useState<CourseResponse | null>(null);
   const [enrolled, setEnrolled] = useState<EnrolledStudent[]>([]);
+  const [courseAssignments, setCourseAssignments] = useState<AssignmentResponse[]>([]);
   const [loadingCourse, setLoadingCourse] = useState(true);
 
   const [enrollOpen, setEnrollOpen] = useState(false);
@@ -54,8 +56,9 @@ const CourseDetails = () => {
     Promise.all([
       getCourseApi(courseId),
       getEnrolledStudentsApi(courseId),
+      getAssignmentsApi({ courseId }),
     ])
-      .then(([c, e]) => { setCourse(c); setEnrolled(e); })
+      .then(([c, e, a]) => { setCourse(c); setEnrolled(e); setCourseAssignments(a); })
       .catch(() => toast({ title: "Failed to load course", variant: "destructive" }))
       .finally(() => setLoadingCourse(false));
   }, [courseId]);
@@ -113,7 +116,6 @@ const CourseDetails = () => {
     );
   }
 
-  const courseAssignments = assignments.filter((a) => a.courseId === String(course.id));
   const courseFiles = files.filter((f) => f.courseId === String(course.id));
   const pct = course.capacity > 0 ? Math.round((course.enrolledCount / course.capacity) * 100) : 0;
   const color = courseColor(course.id);
@@ -232,7 +234,7 @@ const CourseDetails = () => {
             : courseAssignments.map((a) => (
               <Card key={a.id}><CardContent className="p-4 flex items-center justify-between">
                 <div><p className="font-medium">{a.title}</p><p className="text-xs text-muted-foreground">Due {new Date(a.dueDate).toLocaleDateString()} · {a.totalPoints} pts</p></div>
-                <Badge variant={a.status === "open" ? "default" : "secondary"} className="capitalize">{a.status}</Badge>
+                <Badge variant={a.status === "open" ? "default" : a.status === "draft" ? "secondary" : "outline"} className="capitalize">{a.status}</Badge>
               </CardContent></Card>
             ))}
         </TabsContent>
