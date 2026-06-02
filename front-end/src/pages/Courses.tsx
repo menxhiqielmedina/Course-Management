@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Search, Edit, BookOpen, Loader2 } from "lucide-react";
+import { Plus, Search, Edit, BookOpen, Loader2, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,7 @@ import {
 import { useAppStore } from "@/store/useAppStore";
 import { CourseFormDialog } from "@/components/courses/CourseFormDialog";
 import { toast } from "@/hooks/use-toast";
-import { getCoursesApi, updateCourseStatusApi, type CourseResponse } from "@/lib/courseService";
+import { getCoursesApi, updateCourseStatusApi, deleteCourseApi, type CourseResponse } from "@/lib/courseService";
 
 const COURSE_COLORS = [
   "230 75% 56%", "160 60% 45%", "280 65% 55%",
@@ -40,7 +40,7 @@ const Courses = () => {
       const data = await getCoursesApi();
       setCourses(data);
     } catch {
-      toast({ title: "Failed to load courses", variant: "destructive" });
+      setCourses([]);
     } finally {
       setLoading(false);
     }
@@ -66,6 +66,18 @@ const Courses = () => {
       toast({ title: `Course ${newStatus}` });
     } catch {
       toast({ title: "Failed to update status", variant: "destructive" });
+    }
+  };
+
+  const handleDelete = async (c: CourseResponse, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm(`Delete "${c.title}"? This cannot be undone.`)) return;
+    try {
+      await deleteCourseApi(c.id);
+      setCourses((prev) => prev.filter((x) => x.id !== c.id));
+      toast({ title: "Course deleted" });
+    } catch {
+      toast({ title: "Failed to delete course", variant: "destructive" });
     }
   };
 
@@ -152,6 +164,9 @@ const Courses = () => {
                       </Button>
                       <Button variant="outline" size="sm" className="text-muted-foreground" onClick={(e) => handleArchive(c, e)}>
                         {c.status === "archived" ? "Activate" : "Archive"}
+                      </Button>
+                      <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={(e) => handleDelete(c, e)}>
+                        <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   )}

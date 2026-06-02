@@ -87,6 +87,15 @@ namespace WebAPI.Controllers
             return Ok(new { message = "Student enrolled." });
         }
 
+        [HttpDelete("{id}")]
+        [Authorize(Roles = "admin")]
+        public async Task<IActionResult> Delete(int id)
+        {
+            var success = await _courseService.DeleteAsync(id);
+            if (!success) return NotFound(new { message = "Course not found." });
+            return Ok(new { message = "Course deleted." });
+        }
+
         [HttpDelete("{id}/students/{studentId}")]
         [Authorize(Roles = "admin")]
         public async Task<IActionResult> RemoveStudent(int id, int studentId)

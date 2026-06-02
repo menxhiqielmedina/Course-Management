@@ -68,7 +68,7 @@ namespace WebAPI.Services
                 ProfessorId = dto.ProfessorId,
                 Capacity = dto.Capacity,
                 Semester = semester,
-                Status = "draft",
+                Status = new[] { "draft", "active", "archived" }.Contains(dto.Status) ? dto.Status : "draft",
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -180,6 +180,15 @@ namespace WebAPI.Services
 
             await _context.SaveChangesAsync();
             return (true, string.Empty);
+        }
+
+        public async Task<bool> DeleteAsync(int id)
+        {
+            var course = await _context.Courses.FindAsync(id);
+            if (course == null) return false;
+            _context.Courses.Remove(course);
+            await _context.SaveChangesAsync();
+            return true;
         }
 
         public async Task<bool> RemoveStudentAsync(int courseId, int studentId)

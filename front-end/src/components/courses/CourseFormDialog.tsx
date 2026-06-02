@@ -86,8 +86,12 @@ export function CourseFormDialog({ open, onOpenChange, course, onSaved }: Props)
       onSaved(saved);
       onOpenChange(false);
     } catch (err: unknown) {
-      const e = err as { response?: { data?: { message?: string } } };
-      toast({ title: "Error", description: e?.response?.data?.message ?? "Something went wrong.", variant: "destructive" });
+      const e = err as { response?: { status?: number; data?: { message?: string } }; message?: string };
+      const msg = e?.response?.data?.message
+        ?? (e?.response?.status === 401 ? "Not authorized. Please log in again." : null)
+        ?? (e?.message?.includes("Network") ? "Cannot reach the server. Is the backend running?" : null)
+        ?? "Something went wrong.";
+      toast({ title: "Error", description: msg, variant: "destructive" });
     } finally {
       setLoading(false);
     }

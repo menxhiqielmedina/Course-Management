@@ -50,7 +50,7 @@ export async function getCourseApi(id: number): Promise<CourseResponse> {
   return data;
 }
 
-export async function createCourseApi(form: Omit<CourseFormData, "status">): Promise<CourseResponse> {
+export async function createCourseApi(form: CourseFormData): Promise<CourseResponse> {
   const { data } = await api.post<CourseResponse>("/courses", form);
   return data;
 }
@@ -79,4 +79,8 @@ export async function enrollStudentApi(courseId: number, studentId: number): Pro
 
 export async function removeStudentApi(courseId: number, studentId: number): Promise<void> {
   await api.delete(`/courses/${courseId}/students/${studentId}`);
+}
+
+export async function deleteCourseApi(id: number): Promise<void> {
+  await api.delete(`/courses/${id}`);
 }
