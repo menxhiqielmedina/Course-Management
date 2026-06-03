@@ -18,6 +18,8 @@ import { Loader2 } from "lucide-react";
 interface Professor {
   id: number;
   fullName: string;
+  department: string;
+  email: string;
 }
 
 interface Props {
@@ -43,8 +45,10 @@ export function CourseFormDialog({ open, onOpenChange, course, onSaved }: Props)
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    api.get<Professor[]>("/admin/professors").then((r) => setProfessors(r.data)).catch(() => {});
-  }, []);
+    api.get<Professor[]>("/admin/professors").then((r) => setProfessors(r.data)).catch(() => {
+      toast({ title: "Could not load professors", variant: "destructive" });
+    });
+  }, [open]);
 
   useEffect(() => {
     if (course) {
@@ -145,7 +149,11 @@ export function CourseFormDialog({ open, onOpenChange, course, onSaved }: Props)
               <SelectTrigger><SelectValue placeholder="Select professor" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">— None —</SelectItem>
-                {professors.map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.fullName}</SelectItem>)}
+                {professors.map((p) => (
+                  <SelectItem key={p.id} value={String(p.id)}>
+                    {p.fullName} {p.department ? `· ${p.department}` : ""}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

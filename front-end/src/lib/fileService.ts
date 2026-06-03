@@ -40,9 +40,9 @@ export async function uploadFileApi(
 
 export function getDownloadUrl(id: number): string {
   const base = import.meta.env.VITE_API_URL ?? "";
-  return ${base}/files/${id}/download;
+  return `${base}/files/${id}/download`;
 }
 
 export async function deleteFileApi(id: number): Promise<void> {
-  await api.delete(/files/${id});
+  await api.delete(`/files/${id}`);
 }

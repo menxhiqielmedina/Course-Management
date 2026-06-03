@@ -59,6 +59,18 @@ namespace WebAPI.Services
                 });
                 await _context.SaveChangesAsync();
             }
+            else if (role == "professor")
+            {
+                _context.Professors.Add(new Professor
+                {
+                    UserId = user.Id,
+                    FullName = user.FullName,
+                    Email = user.Email,
+                    Department = string.Empty,
+                    CreatedAt = user.CreatedAt
+                });
+                await _context.SaveChangesAsync();
+            }
 
             return MapToResponse(user);
         }

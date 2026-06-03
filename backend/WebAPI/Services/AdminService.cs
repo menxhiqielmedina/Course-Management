@@ -135,7 +135,7 @@ namespace WebAPI.Services
                     Id = p.Id,
                     FullName = p.FullName,
                     Email = p.Email,
-                    Department = p.Department,
+                    Department = p.Department ?? string.Empty,
                     CreatedAt = p.CreatedAt
                 })
                 .ToListAsync();

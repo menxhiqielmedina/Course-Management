@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Http;
 
 namespace WebAPI.DTOs
 {
@@ -22,6 +23,20 @@ namespace WebAPI.DTOs
 
     public class UploadFileDto
     {
+        public int? CourseId { get; set; }
+
+        [MaxLength(50)]
+        public string Category { get; set; } = "course-material";
+
+        [MaxLength(20)]
+        public string Visibility { get; set; } = "course";
+    }
+
+    public class UploadFileRequest
+    {
+        [Required]
+        public IFormFile File { get; set; } = null!;
+
         public int? CourseId { get; set; }
 
         [MaxLength(50)]

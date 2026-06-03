@@ -65,21 +65,37 @@ namespace WebAPI.Services
                 .ToListAsync();
         }
 
+        private static readonly HashSet<string> AllowedExtensions = new()
+        {
+            ".pdf", ".doc", ".docx", ".ppt", ".pptx",
+            ".png", ".jpg", ".jpeg", ".txt", ".zip"
+        };
+
         public async Task<(FileResourceResponseDto? file, string? error)> UploadAsync(IFormFile file, UploadFileDto dto, int userId)
         {
             if (file == null || file.Length == 0)
                 return (null, "No file provided.");
 
-            if (file.Length > 50 * 1024 * 1024)
-                return (null, "File size cannot exceed 50 MB.");
+            if (file.Length > 20 * 1024 * 1024)
+                return (null, "File size cannot exceed 20 MB.");
+
+            var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (!AllowedExtensions.Contains(ext))
+                return (null, $"File type '{ext}' is not allowed. Allowed: {string.Join(", ", AllowedExtensions)}");
 
             if (dto.CourseId.HasValue)
             {
                 var course = await _context.Courses.FindAsync(dto.CourseId.Value);
                 if (course == null) return (null, "Course not found.");
-            }
 
-            var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+                var user = await _context.Users.FindAsync(userId);
+                if (user?.Role == "professor")
+                {
+                    var professor = await _context.Professors.FirstOrDefaultAsync(p => p.UserId == userId);
+                    if (professor == null || course.ProfessorId != professor.Id)
+                        return (null, "You can only upload files to courses assigned to you.");
+                }
+            }
             var storedName = $"{Guid.NewGuid()}{ext}";
             var filePath = Path.Combine(_uploadPath, storedName);
 

@@ -22,6 +22,7 @@ import {
   type CourseResponse, type EnrolledStudent,
 } from "@/lib/courseService";
 import { getAssignmentsApi, type AssignmentResponse } from "@/lib/assignmentService";
+import { getFilesApi, getDownloadUrl, type FileResourceResponse } from "@/lib/fileService";
 import api from "@/lib/api";
 
 const COURSE_COLORS = [
@@ -35,12 +36,13 @@ interface StudentOption { id: number; fullName: string; email: string; }
 const CourseDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user, files } = useAppStore();
+  const { user } = useAppStore();
   const isAdmin = user?.role === "admin";
 
   const [course, setCourse] = useState<CourseResponse | null>(null);
   const [enrolled, setEnrolled] = useState<EnrolledStudent[]>([]);
   const [courseAssignments, setCourseAssignments] = useState<AssignmentResponse[]>([]);
+  const [courseFiles, setCourseFiles] = useState<FileResourceResponse[]>([]);
   const [loadingCourse, setLoadingCourse] = useState(true);
 
   const [enrollOpen, setEnrollOpen] = useState(false);
@@ -57,8 +59,9 @@ const CourseDetails = () => {
       getCourseApi(courseId),
       getEnrolledStudentsApi(courseId),
       getAssignmentsApi({ courseId }),
+      getFilesApi({ courseId }),
     ])
-      .then(([c, e, a]) => { setCourse(c); setEnrolled(e); setCourseAssignments(a); })
+      .then(([c, e, a, f]) => { setCourse(c); setEnrolled(e); setCourseAssignments(a); setCourseFiles(f); })
       .catch(() => toast({ title: "Failed to load course", variant: "destructive" }))
       .finally(() => setLoadingCourse(false));
   }, [courseId]);
@@ -116,7 +119,6 @@ const CourseDetails = () => {
     );
   }
 
-  const courseFiles = files.filter((f) => f.courseId === String(course.id));
   const pct = course.capacity > 0 ? Math.round((course.enrolledCount / course.capacity) * 100) : 0;
   const color = courseColor(course.id);
 
@@ -246,9 +248,11 @@ const CourseDetails = () => {
               <Card key={f.id}><CardContent className="p-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <FileText className="h-5 w-5 text-primary" />
-                  <div><p className="font-medium text-sm">{f.name}</p><p className="text-xs text-muted-foreground">{f.size} · {f.uploadedAt}</p></div>
+                  <div><p className="font-medium text-sm">{f.originalFileName}</p><p className="text-xs text-muted-foreground">{f.sizeFormatted} · {new Date(f.uploadedAt).toLocaleDateString()}</p></div>
                 </div>
-                <Button variant="outline" size="sm">Download</Button>
+                <Button variant="outline" size="sm" asChild>
+                  <a href={getDownloadUrl(f.id)} download={f.originalFileName}>Download</a>
+                </Button>
               </CardContent></Card>
             ))}
         </TabsContent>

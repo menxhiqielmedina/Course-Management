@@ -32,10 +32,17 @@ namespace WebAPI.Controllers
 
         [HttpPost("upload")]
         [Authorize(Roles = "admin,professor")]
-        [RequestSizeLimit(52_428_800)]
-        public async Task<IActionResult> Upload([FromForm] IFormFile file, [FromForm] UploadFileDto dto)
+        [RequestSizeLimit(20_971_520)]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> Upload([FromForm] UploadFileRequest request)
         {
-            var (result, error) = await _fileService.UploadAsync(file, dto, GetUserId());
+            var dto = new UploadFileDto
+            {
+                CourseId = request.CourseId,
+                Category = request.Category,
+                Visibility = request.Visibility
+            };
+            var (result, error) = await _fileService.UploadAsync(request.File, dto, GetUserId());
             if (result == null) return BadRequest(new { message = error });
             return Ok(result);
         }
