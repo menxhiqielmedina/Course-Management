@@ -83,12 +83,13 @@ namespace WebAPI.Services
                 UserId = user.Id,
                 FullName = user.FullName,
                 Email = user.Email,
+                Department = dto.Department.Trim(),
                 CreatedAt = user.CreatedAt
             };
             _context.Students.Add(student);
             await _context.SaveChangesAsync();
 
-            return new StudentDto { Id = student.Id, FullName = student.FullName, Email = student.Email, Status = user.Status, CreatedAt = student.CreatedAt };
+            return new StudentDto { Id = student.Id, FullName = student.FullName, Email = student.Email, Department = student.Department, Status = user.Status, CreatedAt = student.CreatedAt };
         }
 
         public async Task<ProfessorDto?> AddProfessorAsync(AddProfessorDto dto)
@@ -117,12 +118,13 @@ namespace WebAPI.Services
                 UserId = user.Id,
                 FullName = user.FullName,
                 Email = user.Email,
+                Department = dto.Department.Trim(),
                 CreatedAt = user.CreatedAt
             };
             _context.Professors.Add(professor);
             await _context.SaveChangesAsync();
 
-            return new ProfessorDto { Id = professor.Id, FullName = professor.FullName, Email = professor.Email, CreatedAt = professor.CreatedAt };
+            return new ProfessorDto { Id = professor.Id, FullName = professor.FullName, Email = professor.Email, Department = professor.Department, CreatedAt = professor.CreatedAt };
         }
 
         public async Task<List<ProfessorDto>> GetProfessorsAsync()
@@ -134,6 +136,7 @@ namespace WebAPI.Services
                     Id = p.Id,
                     FullName = p.FullName,
                     Email = p.Email,
+                    Department = p.Department ?? string.Empty,
                     CreatedAt = p.CreatedAt
                 })
                 .ToListAsync();
@@ -149,6 +152,7 @@ namespace WebAPI.Services
                     Id = s.Id,
                     FullName = s.FullName,
                     Email = s.Email,
+                    Department = s.Department ?? string.Empty,
                     Status = s.User.Status,
                     CreatedAt = s.CreatedAt
                 })
@@ -166,6 +170,8 @@ namespace WebAPI.Services
 
             student.FullName = dto.FullName.Trim();
             student.Email = email;
+            if (dto.Department != null)
+                student.Department = dto.Department.Trim();
             student.User.FullName = dto.FullName.Trim();
             student.User.Email = email;
             await _context.SaveChangesAsync();
