@@ -12,6 +12,7 @@ export interface Professor {
   id: number;
   fullName: string;
   email: string;
+  department: string;
   createdAt: string;
 }
 
@@ -19,6 +20,7 @@ export interface AddProfessorPayload {
   fullName: string;
   email: string;
   password: string;
+  department: string;
 }
 
 export const getPendingStudents = (): Promise<PendingStudent[]> =>

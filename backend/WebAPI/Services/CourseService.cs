@@ -29,6 +29,7 @@ namespace WebAPI.Services
                     query = query.Where(c => c.Department == professor.Department);
             }
 
+<<<<<<< HEAD
             if (role == "student" && userId.HasValue)
             {
                 var student = await _context.Students.FirstOrDefaultAsync(s => s.UserId == userId.Value);
@@ -36,6 +37,8 @@ namespace WebAPI.Services
                     query = query.Where(c => c.Department == student.Department);
             }
 
+=======
+>>>>>>> 1266130e0c5e731302f6dd871c763a3c83101888
             if (!string.IsNullOrWhiteSpace(search))
                 query = query.Where(c =>
                     c.Title.Contains(search) ||

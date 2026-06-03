@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using WebAPI.Data;
 
@@ -11,9 +12,11 @@ using WebAPI.Data;
 namespace WebAPI.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260602210539_AddAssignmentsModule")]
+    partial class AddAssignmentsModule
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -22,8 +25,6 @@ namespace WebAPI.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
-<<<<<<< HEAD
-=======
             modelBuilder.Entity("WebAPI.Models.Assignment", b =>
                 {
                     b.Property<int>("Id")
@@ -212,69 +213,6 @@ namespace WebAPI.Migrations
                     b.ToTable("CourseStudents");
                 });
 
-            modelBuilder.Entity("WebAPI.Models.FileResource", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Category")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("ContentType")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<int?>("CourseId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Extension")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<string>("OriginalFileName")
-                        .IsRequired()
-                        .HasMaxLength(260)
-                        .HasColumnType("nvarchar(260)");
-
-                    b.Property<long>("SizeBytes")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("StoredFileName")
-                        .IsRequired()
-                        .HasMaxLength(260)
-                        .HasColumnType("nvarchar(260)");
-
-                    b.Property<DateTime>("UploadedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("UploadedByUserId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Visibility")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CourseId");
-
-                    b.HasIndex("UploadedByUserId");
-
-                    b.ToTable("FileResources");
-                });
-
->>>>>>> 1266130e0c5e731302f6dd871c763a3c83101888
             modelBuilder.Entity("WebAPI.Models.Professor", b =>
                 {
                     b.Property<int>("Id")
@@ -286,14 +224,6 @@ namespace WebAPI.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
-<<<<<<< HEAD
-=======
-                    b.Property<string>("Department")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
->>>>>>> 1266130e0c5e731302f6dd871c763a3c83101888
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -393,8 +323,6 @@ namespace WebAPI.Migrations
                     b.ToTable("Users");
                 });
 
-<<<<<<< HEAD
-=======
             modelBuilder.Entity("WebAPI.Models.Assignment", b =>
                 {
                     b.HasOne("WebAPI.Models.Course", "Course")
@@ -469,25 +397,6 @@ namespace WebAPI.Migrations
                     b.Navigation("Student");
                 });
 
-            modelBuilder.Entity("WebAPI.Models.FileResource", b =>
-                {
-                    b.HasOne("WebAPI.Models.Course", "Course")
-                        .WithMany()
-                        .HasForeignKey("CourseId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("WebAPI.Models.User", "UploadedBy")
-                        .WithMany()
-                        .HasForeignKey("UploadedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Course");
-
-                    b.Navigation("UploadedBy");
-                });
-
->>>>>>> 1266130e0c5e731302f6dd871c763a3c83101888
             modelBuilder.Entity("WebAPI.Models.Professor", b =>
                 {
                     b.HasOne("WebAPI.Models.User", "User")
@@ -509,8 +418,6 @@ namespace WebAPI.Migrations
 
                     b.Navigation("User");
                 });
-<<<<<<< HEAD
-=======
 
             modelBuilder.Entity("WebAPI.Models.Assignment", b =>
                 {
@@ -521,7 +428,6 @@ namespace WebAPI.Migrations
                 {
                     b.Navigation("CourseStudents");
                 });
->>>>>>> 1266130e0c5e731302f6dd871c763a3c83101888
 #pragma warning restore 612, 618
         }
     }
