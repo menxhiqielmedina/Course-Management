@@ -21,6 +21,7 @@ export interface RegisterPayload {
   email: string;
   password: string;
   role: "student" | "professor" | "admin";
+  department?: string;
 }
 
 export async function loginApi(payload: LoginPayload): Promise<AuthResponse> {

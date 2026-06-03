@@ -45,6 +45,7 @@ export interface AdminStudent {
   id: number;
   fullName: string;
   email: string;
+  department: string;
   status: string;
   createdAt: string;
 }
@@ -52,10 +53,10 @@ export interface AdminStudent {
 export const getAdminStudents = (): Promise<AdminStudent[]> =>
   api.get("/admin/students").then((r) => r.data);
 
-export const addStudent = (payload: { fullName: string; email: string; password: string }): Promise<AdminStudent> =>
+export const addStudent = (payload: { fullName: string; email: string; password: string; department: string }): Promise<AdminStudent> =>
   api.post("/admin/students", payload).then((r) => r.data);
 
-export const updateStudent = (id: number, payload: { fullName: string; email: string }): Promise<void> =>
+export const updateStudent = (id: number, payload: { fullName: string; email: string; department: string }): Promise<void> =>
   api.put(`/admin/students/${id}`, payload);
 
 export const updateProfessor = (id: number, payload: { fullName: string; email: string }): Promise<void> =>
