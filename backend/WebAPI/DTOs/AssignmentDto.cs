@@ -102,4 +102,48 @@ namespace WebAPI.DTOs
         [Required]
         public string Status { get; set; } = string.Empty;
     }
+
+    public class SubmissionWithAssignmentDto
+    {
+        public int Id { get; set; }
+        public int AssignmentId { get; set; }
+        public string AssignmentTitle { get; set; } = string.Empty;
+        public string CourseCode { get; set; } = string.Empty;
+        public string CourseTitle { get; set; } = string.Empty;
+        public int TotalPoints { get; set; }
+        public int StudentId { get; set; }
+        public string StudentName { get; set; } = string.Empty;
+        public string StudentEmail { get; set; } = string.Empty;
+        public string SubmissionText { get; set; } = string.Empty;
+        public string? AttachmentUrl { get; set; }
+        public DateTime SubmittedAt { get; set; }
+        public string Status { get; set; } = string.Empty;
+        public decimal? GradePoints { get; set; }
+        public string? Feedback { get; set; }
+        public DateTime? GradedAt { get; set; }
+        public string? GradedByName { get; set; }
+    }
+
+    /// <summary>
+    /// Assignment as seen by a student — includes their personal submission status and grade.
+    /// </summary>
+    public class StudentAssignmentDto
+    {
+        public int Id { get; set; }
+        public int CourseId { get; set; }
+        public string CourseCode { get; set; } = string.Empty;
+        public string CourseTitle { get; set; } = string.Empty;
+        public string Title { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public DateTime DueDate { get; set; }
+        public int TotalPoints { get; set; }
+
+        // "pending" | "submitted" | "overdue" | "graded"
+        public string StudentStatus { get; set; } = "pending";
+
+        public decimal? GradePoints { get; set; }
+        public string? Feedback { get; set; }
+        public DateTime? SubmittedAt { get; set; }
+        public string? SubmissionText { get; set; }
+    }
 }

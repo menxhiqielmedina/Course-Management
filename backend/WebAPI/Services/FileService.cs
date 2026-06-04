@@ -144,7 +144,26 @@ namespace WebAPI.Services
             var file = await _context.FileResources.FindAsync(id);
             if (file == null || file.DeletedAt != null) return false;
 
-            if (role != "admin" && file.UploadedByUserId != userId) return false;
+            if (role == "admin")
+            {
+                // admin can delete any file
+            }
+            else if (role == "professor")
+            {
+                var professor = await _context.Professors.FirstOrDefaultAsync(p => p.UserId == userId);
+                if (professor == null) return false;
+
+                // professor can delete files they uploaded OR files in their department's courses
+                bool isOwner = file.UploadedByUserId == userId;
+                bool isInDept = file.CourseId != null &&
+                    await _context.Courses.AnyAsync(c => c.Id == file.CourseId && c.Department == professor.Department);
+
+                if (!isOwner && !isInDept) return false;
+            }
+            else
+            {
+                return false;
+            }
 
             file.DeletedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();

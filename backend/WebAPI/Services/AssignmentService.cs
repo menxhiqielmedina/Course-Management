@@ -9,10 +9,20 @@ namespace WebAPI.Services
     public class AssignmentService : IAssignmentService
     {
         private readonly AppDbContext _context;
+        private readonly string _uploadPath;
 
-        public AssignmentService(AppDbContext context)
+        private static readonly HashSet<string> AllowedAttachmentExtensions = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ".pdf", ".doc", ".docx", ".ppt", ".pptx",
+            ".png", ".jpg", ".jpeg", ".txt", ".zip", ".rar", ".7z"
+        };
+
+        public AssignmentService(AppDbContext context, IWebHostEnvironment env)
         {
             _context = context;
+            _uploadPath = Path.Combine(env.ContentRootPath, "uploads");
+            if (!Directory.Exists(_uploadPath))
+                Directory.CreateDirectory(_uploadPath);
         }
 
         public async Task<List<AssignmentResponseDto>> GetAllAsync(int userId, string role, int? courseId, string? status)
@@ -27,9 +37,9 @@ namespace WebAPI.Services
             {
                 var professor = await _context.Professors.FirstOrDefaultAsync(p => p.UserId == userId);
                 if (professor != null)
-                    query = query.Where(a => a.Course.ProfessorId == professor.Id);
+                    query = query.Where(a => a.Course.ProfessorId == professor.Id || a.CreatedByUserId == userId);
                 else
-                    return new List<AssignmentResponseDto>();
+                    query = query.Where(a => a.CreatedByUserId == userId);
             }
             else if (role == "student")
             {
@@ -214,6 +224,74 @@ namespace WebAPI.Services
             return submission == null ? null : MapSubmissionToDto(submission);
         }
 
+        public async Task<List<StudentAssignmentDto>> GetStudentAssignmentsAsync(int studentId)
+        {
+            var student = await _context.Students.FindAsync(studentId);
+            if (student == null) return new List<StudentAssignmentDto>();
+
+            var enrolledCourseIds = await _context.CourseStudents
+                .Where(cs => cs.StudentId == studentId)
+                .Select(cs => cs.CourseId)
+                .ToListAsync();
+
+            var assignments = await _context.Assignments
+                .Include(a => a.Course)
+                .Where(a => enrolledCourseIds.Contains(a.CourseId) && a.Status != "draft")
+                .OrderBy(a => a.DueDate)
+                .ToListAsync();
+
+            var submissions = await _context.AssignmentSubmissions
+                .Where(s => s.StudentId == studentId)
+                .ToListAsync();
+
+            var submissionMap = submissions.ToDictionary(s => s.AssignmentId);
+
+            return assignments.Select(a =>
+            {
+                submissionMap.TryGetValue(a.Id, out var sub);
+
+                string studentStatus;
+                if (sub != null && sub.Status == "graded")
+                    studentStatus = "graded";
+                else if (sub != null)
+                    studentStatus = "submitted";
+                else if (a.DueDate < DateTime.UtcNow)
+                    studentStatus = "overdue";
+                else
+                    studentStatus = "pending";
+
+                return new StudentAssignmentDto
+                {
+                    Id = a.Id,
+                    CourseId = a.CourseId,
+                    CourseCode = a.Course.Code,
+                    CourseTitle = a.Course.Title,
+                    Title = a.Title,
+                    Description = a.Description,
+                    DueDate = a.DueDate,
+                    TotalPoints = a.TotalPoints,
+                    StudentStatus = studentStatus,
+                    GradePoints = sub?.GradePoints,
+                    Feedback = sub?.Feedback,
+                    SubmittedAt = sub?.SubmittedAt,
+                    SubmissionText = sub?.SubmissionText
+                };
+            }).ToList();
+        }
+
+        public async Task<List<SubmissionResponseDto>> GetAllMySubmissionsAsync(int userId)
+        {
+            var student = await _context.Students.FirstOrDefaultAsync(s => s.UserId == userId);
+            if (student == null) return new List<SubmissionResponseDto>();
+
+            return await _context.AssignmentSubmissions
+                .Include(s => s.Student)
+                .Include(s => s.GradedBy)
+                .Where(s => s.StudentId == student.Id)
+                .Select(s => MapSubmissionToDto(s))
+                .ToListAsync();
+        }
+
         public async Task<(SubmissionResponseDto? submission, string? error)> GradeAsync(int assignmentId, int submissionId, GradeSubmissionDto dto, int userId)
         {
             var assignment = await _context.Assignments.FindAsync(assignmentId);
@@ -237,6 +315,93 @@ namespace WebAPI.Services
 
             await _context.SaveChangesAsync();
             return (await GetSubmissionDto(submission.Id), null);
+        }
+
+        public async Task<List<SubmissionWithAssignmentDto>> GetAllSubmissionsAsync(int userId, string role)
+        {
+            var query = _context.AssignmentSubmissions
+                .Include(s => s.Assignment).ThenInclude(a => a.Course)
+                .Include(s => s.Student)
+                .Include(s => s.GradedBy)
+                .AsQueryable();
+
+            if (role == "professor")
+            {
+                var professor = await _context.Professors.FirstOrDefaultAsync(p => p.UserId == userId);
+                if (professor != null)
+                    query = query.Where(s => s.Assignment.Course.ProfessorId == professor.Id || s.Assignment.CreatedByUserId == userId);
+                else
+                    query = query.Where(s => s.Assignment.CreatedByUserId == userId);
+            }
+
+            return await query
+                .OrderByDescending(s => s.SubmittedAt)
+                .Select(s => new SubmissionWithAssignmentDto
+                {
+                    Id = s.Id,
+                    AssignmentId = s.AssignmentId,
+                    AssignmentTitle = s.Assignment.Title,
+                    CourseCode = s.Assignment.Course.Code,
+                    CourseTitle = s.Assignment.Course.Title,
+                    TotalPoints = s.Assignment.TotalPoints,
+                    StudentId = s.StudentId,
+                    StudentName = s.Student.FullName,
+                    StudentEmail = s.Student.Email,
+                    SubmissionText = s.SubmissionText,
+                    AttachmentUrl = s.AttachmentUrl,
+                    SubmittedAt = s.SubmittedAt,
+                    Status = s.Status,
+                    GradePoints = s.GradePoints,
+                    Feedback = s.Feedback,
+                    GradedAt = s.GradedAt,
+                    GradedByName = s.GradedBy != null ? s.GradedBy.FullName : null
+                })
+                .ToListAsync();
+        }
+
+        public async Task<(string? storedFileName, string? originalFileName, string? error)> UploadAttachmentAsync(IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+                return (null, null, "No file provided.");
+
+            if (file.Length > 50 * 1024 * 1024)
+                return (null, null, "File size cannot exceed 50 MB.");
+
+            var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (!AllowedAttachmentExtensions.Contains(ext))
+                return (null, null, $"File type '{ext}' is not allowed. Allowed: {string.Join(", ", AllowedAttachmentExtensions)}");
+
+            var storedName = $"{Guid.NewGuid()}{ext}";
+            var filePath = Path.Combine(_uploadPath, storedName);
+            await using var stream = new FileStream(filePath, FileMode.Create);
+            await file.CopyToAsync(stream);
+
+            return (storedName, file.FileName, null);
+        }
+
+        public (byte[]? data, string contentType, string fileName)? GetAttachment(string storedFileName)
+        {
+            var safeName = Path.GetFileName(storedFileName);
+            var filePath = Path.Combine(_uploadPath, safeName);
+            if (!File.Exists(filePath)) return null;
+
+            var ext = Path.GetExtension(safeName).ToLowerInvariant();
+            var contentType = ext switch
+            {
+                ".pdf" => "application/pdf",
+                ".doc" or ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                ".ppt" or ".pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                ".png" => "image/png",
+                ".jpg" or ".jpeg" => "image/jpeg",
+                ".txt" => "text/plain",
+                ".zip" => "application/zip",
+                ".rar" => "application/x-rar-compressed",
+                ".7z" => "application/x-7z-compressed",
+                _ => "application/octet-stream"
+            };
+
+            var data = File.ReadAllBytes(filePath);
+            return (data, contentType, safeName);
         }
 
         private async Task<SubmissionResponseDto?> GetSubmissionDto(int id)

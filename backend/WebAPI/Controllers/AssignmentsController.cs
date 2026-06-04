@@ -74,6 +74,14 @@ namespace WebAPI.Controllers
             return Ok(new { message = "Assignment deleted." });
         }
 
+        [HttpGet("submissions")]
+        [Authorize(Roles = "admin,professor")]
+        public async Task<IActionResult> GetAllSubmissions()
+        {
+            var submissions = await _service.GetAllSubmissionsAsync(GetUserId(), GetRole());
+            return Ok(submissions);
+        }
+
         [HttpGet("{id}/submissions")]
         [Authorize(Roles = "admin,professor")]
         public async Task<IActionResult> GetSubmissions(int id)
@@ -97,6 +105,43 @@ namespace WebAPI.Controllers
         {
             var submission = await _service.GetMySubmissionAsync(id, GetUserId());
             return Ok(submission);
+        }
+
+        [HttpGet("my-submissions")]
+        [Authorize(Roles = "student")]
+        public async Task<IActionResult> GetAllMySubmissions()
+        {
+            var submissions = await _service.GetAllMySubmissionsAsync(GetUserId());
+            return Ok(submissions);
+        }
+
+        // GET /api/assignments/student/{studentId}
+        // Returns assignments for a student's enrolled courses with submission status baked in
+        [HttpGet("student/{studentId}")]
+        public async Task<IActionResult> GetStudentAssignments(int studentId)
+        {
+            var result = await _service.GetStudentAssignmentsAsync(studentId);
+            return Ok(result);
+        }
+
+        [HttpPost("{id}/upload-attachment")]
+        [Authorize(Roles = "student")]
+        [RequestSizeLimit(52_428_800)]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> UploadAttachment(int id, IFormFile file)
+        {
+            var (storedFileName, originalFileName, error) = await _service.UploadAttachmentAsync(file);
+            if (error != null) return BadRequest(new { message = error });
+            return Ok(new { storedFileName, originalFileName });
+        }
+
+        [HttpGet("attachment/{storedFileName}")]
+        public IActionResult GetAttachment(string storedFileName)
+        {
+            var result = _service.GetAttachment(storedFileName);
+            if (result == null) return NotFound(new { message = "Attachment not found." });
+            var (data, contentType, fileName) = result.Value;
+            return File(data!, contentType, fileName);
         }
 
         [HttpPut("{id}/submissions/{submissionId}/grade")]
