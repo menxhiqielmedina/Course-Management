@@ -11,6 +11,10 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { useAppStore } from "@/store/useAppStore";
 import { toast } from "@/hooks/use-toast";
@@ -50,6 +54,8 @@ const Files = () => {
   const [files, setFiles] = useState<FileResourceResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [courses, setCourses] = useState<CourseResponse[]>([]);
+  const [deleteTarget, setDeleteTarget] = useState<FileResourceResponse | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [filterCourse, setFilterCourse] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
@@ -102,14 +108,22 @@ const Files = () => {
     }
   };
 
-  const handleDelete = async (f: FileResourceResponse) => {
-    if (!window.confirm(`Delete "${f.originalFileName}"?`)) return;
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
     try {
-      await deleteFileApi(f.id);
-      setFiles((prev) => prev.filter((x) => x.id !== f.id));
+      await deleteFileApi(deleteTarget.id);
+      setFiles((prev) => prev.filter((x) => x.id !== deleteTarget.id));
       toast({ title: "File deleted" });
-    } catch {
-      toast({ title: "Failed to delete file", variant: "destructive" });
+      setDeleteTarget(null);
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      const msg = status === 404
+        ? "You don't have permission to delete this file."
+        : "Failed to delete file. Please try again.";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -199,7 +213,7 @@ const Files = () => {
                         <Download className="h-3.5 w-3.5" />
                       </Button>
                       {canUpload && (
-                        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => handleDelete(f)}>
+                        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => setDeleteTarget(f)}>
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       )}
@@ -270,6 +284,28 @@ const Files = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete file?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove <strong>{deleteTarget?.originalFileName}</strong> and cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              disabled={deleteLoading}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteLoading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { ArrowLeft, BookOpen, Users, Calendar, FileText, UserPlus, Trash2, Loader2 } from "lucide-react";
+import { ArrowLeft, BookOpen, Users, Calendar, FileText, UserPlus, Trash2, Loader2, CheckCircle, Paperclip, X, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useAppStore } from "@/store/useAppStore";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { toast } from "@/hooks/use-toast";
@@ -21,7 +22,11 @@ import {
   getCourseApi, getEnrolledStudentsApi, enrollStudentApi, removeStudentApi,
   type CourseResponse, type EnrolledStudent,
 } from "@/lib/courseService";
-import { getAssignmentsApi, type AssignmentResponse } from "@/lib/assignmentService";
+import {
+  getAssignmentsApi, getAllMySubmissionsApi, submitAssignmentApi, getMySubmissionApi,
+  uploadSubmissionAttachmentApi, parseAttachmentUrl, getAttachmentDownloadUrl,
+  type AssignmentResponse, type SubmissionResponse,
+} from "@/lib/assignmentService";
 import { getFilesApi, downloadFileApi, viewFileApi, type FileResourceResponse } from "@/lib/fileService";
 import api from "@/lib/api";
 
@@ -38,12 +43,22 @@ const CourseDetails = () => {
   const navigate = useNavigate();
   const { user } = useAppStore();
   const isAdmin = user?.role === "admin";
+  const isStudent = user?.role === "student";
 
   const [course, setCourse] = useState<CourseResponse | null>(null);
   const [enrolled, setEnrolled] = useState<EnrolledStudent[]>([]);
   const [courseAssignments, setCourseAssignments] = useState<AssignmentResponse[]>([]);
   const [courseFiles, setCourseFiles] = useState<FileResourceResponse[]>([]);
+  const [mySubmissions, setMySubmissions] = useState<Record<number, SubmissionResponse>>({});
   const [loadingCourse, setLoadingCourse] = useState(true);
+
+  // Submit dialog (student)
+  const [submitOpen, setSubmitOpen] = useState(false);
+  const [submittingAssignment, setSubmittingAssignment] = useState<AssignmentResponse | null>(null);
+  const [mySubmission, setMySubmission] = useState<SubmissionResponse | null>(null);
+  const [submissionText, setSubmissionText] = useState("");
+  const [submissionFile, setSubmissionFile] = useState<File | null>(null);
+  const [submitLoading, setSubmitLoading] = useState(false);
 
   const [enrollOpen, setEnrollOpen] = useState(false);
   const [studentSearch, setStudentSearch] = useState("");
@@ -60,8 +75,16 @@ const CourseDetails = () => {
       getEnrolledStudentsApi(courseId),
       getAssignmentsApi({ courseId }),
       getFilesApi({ courseId }),
+      isStudent ? getAllMySubmissionsApi() : Promise.resolve([]),
     ])
-      .then(([c, e, a, f]) => { setCourse(c); setEnrolled(e); setCourseAssignments(a); setCourseFiles(f); })
+      .then(([c, e, a, f, subs]) => {
+        setCourse(c); setEnrolled(e); setCourseAssignments(a); setCourseFiles(f);
+        if (isStudent && Array.isArray(subs)) {
+          const map: Record<number, SubmissionResponse> = {};
+          (subs as SubmissionResponse[]).forEach((s) => { map[s.assignmentId] = s; });
+          setMySubmissions(map);
+        }
+      })
       .catch(() => toast({ title: "Failed to load course", variant: "destructive" }))
       .finally(() => setLoadingCourse(false));
   }, [courseId]);
@@ -100,6 +123,48 @@ const CourseDetails = () => {
       toast({ title: "Student removed", description: `${fullName} removed from ${course.code}.` });
     } catch {
       toast({ title: "Failed to remove student", variant: "destructive" });
+    }
+  };
+
+  const openSubmit = async (a: AssignmentResponse) => {
+    setSubmittingAssignment(a);
+    setSubmissionText("");
+    setSubmissionFile(null);
+    setMySubmission(null);
+    setSubmitOpen(true);
+    const cached = mySubmissions[a.id];
+    if (cached) {
+      setMySubmission(cached);
+      setSubmissionText(cached.submissionText);
+    } else {
+      try {
+        const sub = await getMySubmissionApi(a.id);
+        setMySubmission(sub);
+        if (sub) setSubmissionText(sub.submissionText);
+      } catch {}
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!submittingAssignment) return;
+    setSubmitLoading(true);
+    try {
+      let attachmentUrl: string | undefined;
+      if (submissionFile) {
+        const { storedFileName, originalFileName } = await uploadSubmissionAttachmentApi(submittingAssignment.id, submissionFile);
+        attachmentUrl = `${storedFileName}|${originalFileName}`;
+      }
+      const sub = await submitAssignmentApi(submittingAssignment.id, submissionText, attachmentUrl);
+      setMySubmission(sub);
+      setMySubmissions((prev) => ({ ...prev, [submittingAssignment.id]: sub }));
+      setSubmissionFile(null);
+      toast({ title: "Submitted successfully" });
+      setSubmitOpen(false);
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      toast({ title: "Error", description: e?.response?.data?.message ?? "Something went wrong.", variant: "destructive" });
+    } finally {
+      setSubmitLoading(false);
     }
   };
 
@@ -143,7 +208,7 @@ const CourseDetails = () => {
             <div>
               <Badge variant="secondary">{course.code}</Badge>
               <h1 className="text-3xl font-bold mt-2">{course.title}</h1>
-              <p className="text-muted-foreground mt-1">{course.department} · {course.semester}</p>
+              <p className="text-muted-foreground mt-1">{course.department} Â· {course.semester}</p>
             </div>
             <div className="flex gap-4 text-sm">
               <div><div className="text-2xl font-bold">{course.credits}</div><div className="text-xs text-muted-foreground">Credits</div></div>
@@ -172,7 +237,7 @@ const CourseDetails = () => {
             <CardHeader><CardTitle className="text-base">Instructor</CardTitle></CardHeader>
             <CardContent className="flex items-center gap-3">
               <div className="h-12 w-12 rounded-full gradient-primary flex items-center justify-center text-primary-foreground font-bold">
-                {course.professorName?.[0] ?? "—"}
+                {course.professorName?.[0] ?? "â€”"}
               </div>
               <div>
                 <p className="font-medium">{course.professorName ?? "Not assigned"}</p>
@@ -233,12 +298,71 @@ const CourseDetails = () => {
         <TabsContent value="assignments" className="mt-4 space-y-2">
           {courseAssignments.length === 0
             ? <Card><CardContent><EmptyState title="No assignments yet" /></CardContent></Card>
-            : courseAssignments.map((a) => (
-              <Card key={a.id}><CardContent className="p-4 flex items-center justify-between">
-                <div><p className="font-medium">{a.title}</p><p className="text-xs text-muted-foreground">Due {new Date(a.dueDate).toLocaleDateString()} · {a.totalPoints} pts</p></div>
-                <Badge variant={a.status === "open" ? "default" : a.status === "draft" ? "secondary" : "outline"} className="capitalize">{a.status}</Badge>
-              </CardContent></Card>
-            ))}
+            : courseAssignments.map((a) => {
+              const mySub = mySubmissions[a.id];
+              const days = Math.ceil((new Date(a.dueDate).getTime() - Date.now()) / 86400000);
+              const isOverdue = days < 0 && a.status === "open";
+              const isUrgent = days >= 0 && days <= 3 && a.status === "open";
+              return (
+                <Card key={a.id} className={`hover:shadow-md transition ${isStudent && a.status === "open" && !mySub ? "border-l-4 border-l-primary" : isStudent && isOverdue && !mySub ? "border-l-4 border-l-destructive" : ""}`}>
+                  <CardContent className="p-5 flex flex-col md:flex-row md:items-center gap-4">
+                    <div className={`h-12 w-12 rounded-xl flex items-center justify-center shrink-0 ${
+                      mySub?.status === "graded" ? "bg-green-100 text-green-600" :
+                      mySub ? "bg-blue-100 text-blue-600" :
+                      isOverdue ? "bg-destructive/10 text-destructive" :
+                      "bg-primary/10 text-primary"
+                    }`}>
+                      {mySub?.status === "graded" ? <CheckCircle className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-semibold">{a.title}</p>
+                        {!isStudent && (
+                          <Badge variant={a.status === "open" ? "default" : a.status === "draft" ? "secondary" : "outline"} className="capitalize">{a.status}</Badge>
+                        )}
+                        {isStudent && mySub?.status === "graded" && (
+                          <Badge variant="default">Graded: {mySub.gradePoints}/{a.totalPoints}</Badge>
+                        )}
+                        {isStudent && mySub?.status === "submitted" && (
+                          <Badge variant="secondary">Submitted</Badge>
+                        )}
+                        {isStudent && !mySub && a.status === "open" && (
+                          <Badge variant="outline" className="text-muted-foreground">Not submitted</Badge>
+                        )}
+                        {isStudent && isUrgent && !mySub && (
+                          <Badge variant="destructive" className="text-[10px]">{days}d left</Badge>
+                        )}
+                        {isStudent && isOverdue && !mySub && (
+                          <Badge variant="destructive" className="text-[10px]">Overdue</Badge>
+                        )}
+                      </div>
+                      {a.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{a.description}</p>}
+                      <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />Due {new Date(a.dueDate).toLocaleDateString()}</span>
+                        <span>{a.totalPoints} pts</span>
+                        {isStudent && mySub?.feedback && <span className="text-green-600 italic truncate max-w-[200px]">"{mySub.feedback}"</span>}
+                      </div>
+                    </div>
+                    {isStudent && (
+                      <div className="flex items-center gap-2 shrink-0">
+                        {a.status === "open" && !mySub && (
+                          <Button size="sm" className="gradient-primary text-primary-foreground" onClick={() => openSubmit(a)}>Submit</Button>
+                        )}
+                        {a.status === "open" && mySub && (
+                          <>
+                            <Button size="sm" className="gradient-primary text-primary-foreground" onClick={() => openSubmit(a)}>Update</Button>
+                            <Button variant="outline" size="sm" onClick={() => openSubmit(a)}>View</Button>
+                          </>
+                        )}
+                        {a.status !== "open" && (
+                          <Button variant="outline" size="sm" onClick={() => openSubmit(a)}>View</Button>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
         </TabsContent>
 
         <TabsContent value="files" className="mt-4 space-y-2">
@@ -248,7 +372,7 @@ const CourseDetails = () => {
               <Card key={f.id}><CardContent className="p-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <FileText className="h-5 w-5 text-primary" />
-                  <div><p className="font-medium text-sm">{f.originalFileName}</p><p className="text-xs text-muted-foreground">{f.sizeFormatted} · {new Date(f.uploadedAt).toLocaleDateString()}</p></div>
+                  <div><p className="font-medium text-sm">{f.originalFileName}</p><p className="text-xs text-muted-foreground">{f.sizeFormatted} Â· {new Date(f.uploadedAt).toLocaleDateString()}</p></div>
                 </div>
                 <div className="flex gap-2">
                   {(f.contentType.startsWith("image/") || f.contentType === "application/pdf") && (
@@ -260,6 +384,105 @@ const CourseDetails = () => {
             ))}
         </TabsContent>
       </Tabs>
+
+      {/* Submit Dialog (Student) */}
+      <Dialog open={submitOpen} onOpenChange={setSubmitOpen}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>{submittingAssignment?.title}</DialogTitle>
+          </DialogHeader>
+          <div className="text-xs text-muted-foreground space-y-1">
+            <p>Due {submittingAssignment ? new Date(submittingAssignment.dueDate).toLocaleString() : ""}</p>
+            <p>{submittingAssignment?.totalPoints} pts</p>
+            {submittingAssignment?.description && <p className="mt-1 text-sm text-foreground">{submittingAssignment.description}</p>}
+          </div>
+          {mySubmission?.status === "graded" ? (
+            <div className="space-y-3">
+              {mySubmission.submissionText && (
+                <div className="bg-muted rounded-md p-3">
+                  <p className="text-sm font-medium">Your submission</p>
+                  <p className="text-sm mt-1">{mySubmission.submissionText}</p>
+                </div>
+              )}
+              {(() => { const att = parseAttachmentUrl(mySubmission.attachmentUrl); return att ? (
+                <a href={getAttachmentDownloadUrl(att.stored)} target="_blank" rel="noreferrer"
+                  className="flex items-center gap-2 text-sm text-primary hover:underline">
+                  <Paperclip className="h-3.5 w-3.5" />{att.name}
+                </a>
+              ) : null; })()}
+              <div className="bg-green-50 dark:bg-green-950 rounded-md p-3 space-y-1">
+                <p className="text-sm font-medium text-green-700 dark:text-green-300">Grade: {mySubmission.gradePoints} / {submittingAssignment?.totalPoints}</p>
+                {mySubmission.feedback && <p className="text-sm text-muted-foreground">{mySubmission.feedback}</p>}
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {mySubmission && (
+                <div className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-950 rounded-md p-2">
+                  You already submitted. Saving again will update your submission.
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <Label>Submission text</Label>
+                <Textarea
+                  rows={4}
+                  value={submissionText}
+                  onChange={(e) => setSubmissionText(e.target.value)}
+                  placeholder="Write your answer here..."
+                  disabled={submittingAssignment?.status !== "open"}
+                />
+              </div>
+              {submittingAssignment?.status === "open" && (
+                <div className="space-y-1.5">
+                  <Label>Attachment (optional)</Label>
+                  {submissionFile ? (
+                    <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+                      <Paperclip className="h-4 w-4 text-primary shrink-0" />
+                      <span className="flex-1 truncate">{submissionFile.name}</span>
+                      <button type="button" onClick={() => setSubmissionFile(null)} className="text-muted-foreground hover:text-destructive">
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {(() => { const att = parseAttachmentUrl(mySubmission?.attachmentUrl ?? null); return att ? (
+                        <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm text-muted-foreground">
+                          <Paperclip className="h-4 w-4 shrink-0" />
+                          <span className="flex-1 truncate">Current: {att.name}</span>
+                        </div>
+                      ) : null; })()}
+                      <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground hover:border-primary hover:text-primary transition">
+                        <Paperclip className="h-4 w-4" />
+                        <span>Click to attach a file (PDF, ZIP, DOCX, â€¦)</span>
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept=".pdf,.doc,.docx,.ppt,.pptx,.png,.jpg,.jpeg,.txt,.zip,.rar,.7z"
+                          onChange={(e) => setSubmissionFile(e.target.files?.[0] ?? null)}
+                        />
+                      </label>
+                    </>
+                  )}
+                  <p className="text-xs text-muted-foreground">Max 50 MB Â· PDF, DOCX, PPTX, ZIP, RAR, 7z, images, TXT</p>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSubmitOpen(false)}>Close</Button>
+            {mySubmission?.status !== "graded" && submittingAssignment?.status === "open" && (
+              <Button
+                onClick={handleSubmit}
+                disabled={submitLoading || (!submissionText.trim() && !submissionFile)}
+                className="gradient-primary text-primary-foreground"
+              >
+                {submitLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                {mySubmission ? "Update submission" : "Submit"}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={enrollOpen} onOpenChange={setEnrollOpen}>
         <DialogContent className="sm:max-w-[440px]">

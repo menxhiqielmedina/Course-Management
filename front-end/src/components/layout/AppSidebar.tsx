@@ -34,7 +34,6 @@ const studentMain = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "My Courses", url: "/courses", icon: BookOpen },
   { title: "Schedule", url: "/schedule", icon: Calendar },
-  { title: "Assignments", url: "/assignments", icon: FileText },
   { title: "Files", url: "/files", icon: FolderOpen },
   { title: "Notifications", url: "/notifications", icon: Bell },
   { title: "Settings", url: "/settings", icon: Settings },

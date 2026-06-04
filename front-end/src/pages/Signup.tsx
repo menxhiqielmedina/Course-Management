@@ -4,13 +4,17 @@ import { GraduationCap, Loader2, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { registerApi } from "@/lib/authService";
+
+const DEPARTMENTS = ["Computer Science", "Mathematics", "Physics", "Engineering"];
 
 const Signup = () => {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [department, setDepartment] = useState("Computer Science");
   const [errors, setErrors] = useState<{
     fullName?: string;
     email?: string;
@@ -38,7 +42,7 @@ const Signup = () => {
 
     setLoading(true);
     try {
-      await registerApi({ fullName: fullName.trim(), email: email.trim(), password, role: "student" });
+      await registerApi({ fullName: fullName.trim(), email: email.trim(), password, role: "student", department });
       setSubmitted(true);
     } catch (err: unknown) {
       const msg =
@@ -136,6 +140,16 @@ const Signup = () => {
                     disabled={loading}
                   />
                   {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="department">Department</Label>
+                  <Select value={department} onValueChange={setDepartment} disabled={loading}>
+                    <SelectTrigger id="department"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {DEPARTMENTS.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-2">

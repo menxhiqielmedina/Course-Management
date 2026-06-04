@@ -85,6 +85,80 @@ export async function getMySubmissionApi(assignmentId: number): Promise<Submissi
   return data;
 }
 
+export async function getAllMySubmissionsApi(): Promise<SubmissionResponse[]> {
+  const { data } = await api.get<SubmissionResponse[]>("/assignments/my-submissions");
+  return data;
+}
+
+export interface StudentAssignment {
+  id: number;
+  courseId: number;
+  courseCode: string;
+  courseTitle: string;
+  title: string;
+  description: string;
+  dueDate: string;
+  totalPoints: number;
+  studentStatus: "pending" | "submitted" | "overdue" | "graded";
+  gradePoints: number | null;
+  feedback: string | null;
+  submittedAt: string | null;
+  submissionText: string | null;
+}
+
+export async function getStudentAssignmentsApi(studentId: number): Promise<StudentAssignment[]> {
+  const { data } = await api.get<StudentAssignment[]>(`/assignments/student/${studentId}`);
+  return data;
+}
+
+export interface SubmissionWithAssignment {
+  id: number;
+  assignmentId: number;
+  assignmentTitle: string;
+  courseCode: string;
+  courseTitle: string;
+  totalPoints: number;
+  studentId: number;
+  studentName: string;
+  studentEmail: string;
+  submissionText: string;
+  attachmentUrl: string | null;
+  submittedAt: string;
+  status: "submitted" | "late" | "graded";
+  gradePoints: number | null;
+  feedback: string | null;
+  gradedAt: string | null;
+  gradedByName: string | null;
+}
+
+export async function getAllSubmissionsForProfessorApi(): Promise<SubmissionWithAssignment[]> {
+  const { data } = await api.get<SubmissionWithAssignment[]>("/assignments/submissions");
+  return data;
+}
+
+export async function uploadSubmissionAttachmentApi(
+  assignmentId: number,
+  file: File
+): Promise<{ storedFileName: string; originalFileName: string }> {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await api.post(`/assignments/${assignmentId}/upload-attachment`, form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+
+export function getAttachmentDownloadUrl(storedFileName: string): string {
+  return `/api/assignments/attachment/${storedFileName}`;
+}
+
+export function parseAttachmentUrl(url: string | null): { stored: string; name: string } | null {
+  if (!url) return null;
+  const idx = url.indexOf("|");
+  if (idx === -1) return { stored: url, name: url };
+  return { stored: url.slice(0, idx), name: url.slice(idx + 1) };
+}
+
 export async function gradeSubmissionApi(assignmentId: number, submissionId: number, gradePoints: number, feedback?: string): Promise<SubmissionResponse> {
   const { data } = await api.put<SubmissionResponse>(`/assignments/${assignmentId}/submissions/${submissionId}/grade`, { gradePoints, feedback });
   return data;

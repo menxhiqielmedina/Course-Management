@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, FileText, Calendar, Eye, Loader2, Trash2, Edit, CheckCircle } from "lucide-react";
+import { Plus, FileText, Calendar, Eye, Loader2, Trash2, Edit, CheckCircle, Search, Paperclip, X } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -24,7 +24,10 @@ import {
   getAssignmentsApi, createAssignmentApi, updateAssignmentApi,
   updateAssignmentStatusApi, deleteAssignmentApi, getSubmissionsApi,
   submitAssignmentApi, getMySubmissionApi, gradeSubmissionApi,
-  type AssignmentResponse, type SubmissionResponse,
+  getStudentAssignmentsApi, getAllSubmissionsForProfessorApi,
+  uploadSubmissionAttachmentApi, parseAttachmentUrl, getAttachmentDownloadUrl,
+  type AssignmentResponse, type SubmissionResponse, type StudentAssignment,
+  type SubmissionWithAssignment,
 } from "@/lib/assignmentService";
 import { getCoursesApi, type CourseResponse } from "@/lib/courseService";
 
@@ -42,6 +45,10 @@ const Assignments = () => {
   const [assignments, setAssignments] = useState<AssignmentResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [courses, setCourses] = useState<CourseResponse[]>([]);
+  // student submission map: assignmentId → submission (legacy, used for submit dialog sync)
+  const [mySubmissions, setMySubmissions] = useState<Record<number, SubmissionResponse>>({});
+  // student assignments from dedicated endpoint (includes status + grade in one call)
+  const [studentAssignments, setStudentAssignments] = useState<StudentAssignment[]>([]);
 
   // Form dialog
   const [formOpen, setFormOpen] = useState(false);
@@ -64,22 +71,42 @@ const Assignments = () => {
   const [gradePoints, setGradePoints] = useState("");
   const [feedback, setFeedback] = useState("");
   const [gradeLoading, setGradeLoading] = useState(false);
+  const [gradeContext, setGradeContext] = useState<{ assignmentId: number; totalPoints: number } | null>(null);
+
+  // All-submissions tab (professor)
+  const [allSubmissions, setAllSubmissions] = useState<SubmissionWithAssignment[]>([]);
+  const [allSubmissionsLoaded, setAllSubmissionsLoaded] = useState(false);
+  const [allSubmissionsLoading, setAllSubmissionsLoading] = useState(false);
+  const [submissionsSearch, setSubmissionsSearch] = useState("");
+  const [submissionsFilter, setSubmissionsFilter] = useState<"all" | "ungraded" | "graded">("all");
 
   // Submit dialog (student)
   const [submitOpen, setSubmitOpen] = useState(false);
   const [submittingAssignment, setSubmittingAssignment] = useState<AssignmentResponse | null>(null);
   const [mySubmission, setMySubmission] = useState<SubmissionResponse | null>(null);
   const [submissionText, setSubmissionText] = useState("");
+  const [submissionFile, setSubmissionFile] = useState<File | null>(null);
   const [submitLoading, setSubmitLoading] = useState(false);
 
   useEffect(() => {
-    Promise.all([
-      getAssignmentsApi(),
-      canManage ? getCoursesApi() : Promise.resolve([]),
-    ])
-      .then(([a, c]) => { setAssignments(a); setCourses(c); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    const loadData = async () => {
+      try {
+        if (isStudent && user?.id) {
+          // Use dedicated student endpoint — returns assignments + status + grade in one call
+          const sa = await getStudentAssignmentsApi(Number(user.id));
+          setStudentAssignments(sa);
+        } else {
+          const [a, c] = await Promise.all([
+            getAssignmentsApi(),
+            canManage ? getCoursesApi() : Promise.resolve([]),
+          ]);
+          setAssignments(a);
+          setCourses(c);
+        }
+      } catch {}
+      finally { setLoading(false); }
+    };
+    loadData();
   }, []);
 
   const openForm = (assignment?: AssignmentResponse) => {
@@ -163,20 +190,55 @@ const Assignments = () => {
     setGradingSubmission(s);
     setGradePoints(s.gradePoints != null ? String(s.gradePoints) : "");
     setFeedback(s.feedback ?? "");
+    setGradeContext({ assignmentId: selectedAssignment!.id, totalPoints: selectedAssignment!.totalPoints });
     setGradeOpen(true);
   };
 
+  const openGradeFromAll = (s: SubmissionWithAssignment) => {
+    setGradingSubmission({
+      id: s.id, assignmentId: s.assignmentId, studentId: s.studentId,
+      studentName: s.studentName, studentEmail: s.studentEmail,
+      submissionText: s.submissionText, attachmentUrl: s.attachmentUrl,
+      submittedAt: s.submittedAt, status: s.status,
+      gradePoints: s.gradePoints, feedback: s.feedback,
+      gradedAt: s.gradedAt, gradedByName: s.gradedByName,
+    });
+    setGradePoints(s.gradePoints != null ? String(s.gradePoints) : "");
+    setFeedback(s.feedback ?? "");
+    setGradeContext({ assignmentId: s.assignmentId, totalPoints: s.totalPoints });
+    setGradeOpen(true);
+  };
+
+  const loadAllSubmissions = async () => {
+    if (allSubmissionsLoaded) return;
+    setAllSubmissionsLoading(true);
+    try {
+      const data = await getAllSubmissionsForProfessorApi();
+      setAllSubmissions(data);
+      setAllSubmissionsLoaded(true);
+    } catch {
+      toast({ title: "Failed to load submissions", variant: "destructive" });
+    } finally {
+      setAllSubmissionsLoading(false);
+    }
+  };
+
   const handleGrade = async () => {
-    if (!gradingSubmission || !selectedAssignment) return;
+    if (!gradingSubmission || !gradeContext) return;
     const pts = parseFloat(gradePoints);
-    if (isNaN(pts) || pts < 0 || pts > selectedAssignment.totalPoints) {
-      toast({ title: `Grade must be between 0 and ${selectedAssignment.totalPoints}`, variant: "destructive" });
+    if (isNaN(pts) || pts < 0 || pts > gradeContext.totalPoints) {
+      toast({ title: `Grade must be between 0 and ${gradeContext.totalPoints}`, variant: "destructive" });
       return;
     }
     setGradeLoading(true);
     try {
-      const updated = await gradeSubmissionApi(selectedAssignment.id, gradingSubmission.id, pts, feedback || undefined);
+      const updated = await gradeSubmissionApi(gradeContext.assignmentId, gradingSubmission.id, pts, feedback || undefined);
       setSubmissions((prev) => prev.map((s) => s.id === updated.id ? updated : s));
+      setAllSubmissions((prev) => prev.map((s) =>
+        s.id === updated.id
+          ? { ...s, gradePoints: updated.gradePoints, feedback: updated.feedback, status: updated.status, gradedAt: updated.gradedAt, gradedByName: updated.gradedByName }
+          : s
+      ));
       toast({ title: "Submission graded" });
       setGradeOpen(false);
     } catch (err: unknown) {
@@ -190,23 +252,44 @@ const Assignments = () => {
   const openSubmit = async (a: AssignmentResponse) => {
     setSubmittingAssignment(a);
     setSubmissionText("");
+    setSubmissionFile(null);
     setMySubmission(null);
     setSubmitOpen(true);
-    try {
-      const sub = await getMySubmissionApi(a.id);
-      setMySubmission(sub);
-      if (sub) setSubmissionText(sub.submissionText);
-    } catch {}
+    // check if we already have data from the student endpoint to avoid an extra API call
+    const cached = studentAssignments.find((sa) => sa.id === a.id);
+    if (cached?.submissionText) {
+      setSubmissionText(cached.submissionText);
+      setMySubmission({
+        id: 0, assignmentId: a.id, studentId: 0, studentName: "", studentEmail: "",
+        submissionText: cached.submissionText, attachmentUrl: null,
+        submittedAt: cached.submittedAt ?? "", status: cached.studentStatus === "graded" ? "graded" : "submitted",
+        gradePoints: cached.gradePoints, feedback: cached.feedback,
+        gradedAt: null, gradedByName: null,
+      });
+    } else {
+      try {
+        const sub = await getMySubmissionApi(a.id);
+        setMySubmission(sub);
+        if (sub) setSubmissionText(sub.submissionText);
+      } catch {}
+    }
   };
 
   const handleSubmit = async () => {
     if (!submittingAssignment) return;
     setSubmitLoading(true);
     try {
-      const sub = await submitAssignmentApi(submittingAssignment.id, submissionText);
+      let attachmentUrl: string | undefined;
+      if (submissionFile) {
+        const { storedFileName, originalFileName } = await uploadSubmissionAttachmentApi(submittingAssignment.id, submissionFile);
+        attachmentUrl = `${storedFileName}|${originalFileName}`;
+      }
+      const sub = await submitAssignmentApi(submittingAssignment.id, submissionText, attachmentUrl);
       setMySubmission(sub);
-      setAssignments((prev) => prev.map((a) => a.id === submittingAssignment.id
-        ? { ...a, submissionCount: mySubmission ? a.submissionCount : a.submissionCount + 1 }
+      setMySubmissions((prev) => ({ ...prev, [submittingAssignment.id]: sub }));
+      setSubmissionFile(null);
+      setStudentAssignments((prev) => prev.map((a) => a.id === submittingAssignment.id
+        ? { ...a, studentStatus: "submitted", submittedAt: sub.submittedAt, submissionText: sub.submissionText }
         : a));
       toast({ title: "Submitted successfully" });
       setSubmitOpen(false);
@@ -218,33 +301,52 @@ const Assignments = () => {
     }
   };
 
-  const renderList = (filter?: string) => {
-    const list = filter && filter !== "all" ? assignments.filter((a) => a.status === filter) : assignments;
+  const renderList = (list: AssignmentResponse[]) => {
     if (list.length === 0)
       return <Card><CardContent className="p-8 text-center text-muted-foreground text-sm">No assignments here.</CardContent></Card>;
 
+    const sorted = [...list].sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+
     return (
       <div className="space-y-3">
-        {list.map((a) => {
+        {sorted.map((a) => {
           const days = Math.ceil((new Date(a.dueDate).getTime() - Date.now()) / 86400000);
+          const mySub = mySubmissions[a.id];
+          const isOverdue = days < 0 && a.status === "open";
+          const isUrgent = days >= 0 && days <= 3 && a.status === "open";
+
           return (
-            <Card key={a.id} className="hover:shadow-md transition">
+            <Card key={a.id} className={`hover:shadow-md transition ${isStudent && a.status === "open" && !mySub ? "border-l-4 border-l-primary" : ""}`}>
               <CardContent className="p-5 flex flex-col md:flex-row md:items-center gap-4">
-                <div className="h-12 w-12 rounded-xl flex items-center justify-center shrink-0 bg-primary/10 text-primary">
-                  <FileText className="h-5 w-5" />
+                <div className={`h-12 w-12 rounded-xl flex items-center justify-center shrink-0 ${
+                  mySub?.status === "graded" ? "bg-green-100 text-green-600" :
+                  mySub ? "bg-blue-100 text-blue-600" :
+                  isOverdue ? "bg-destructive/10 text-destructive" :
+                  "bg-primary/10 text-primary"
+                }`}>
+                  {mySub?.status === "graded" ? <CheckCircle className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="font-semibold">{a.title}</h3>
                     <Badge variant="outline">{a.courseCode}</Badge>
-                    <Badge variant={statusVariant(a.status)} className="capitalize">{a.status}</Badge>
-                    {days > 0 && days <= 7 && <Badge variant="destructive" className="text-[10px]">{days}d left</Badge>}
-                    {days < 0 && a.status === "open" && <Badge variant="destructive" className="text-[10px]">Overdue</Badge>}
+                    {!isStudent && <Badge variant={statusVariant(a.status)} className="capitalize">{a.status}</Badge>}
+                    {isStudent && mySub && (
+                      <Badge variant={mySub.status === "graded" ? "default" : "secondary"} className="capitalize">
+                        {mySub.status === "graded" ? `Graded: ${mySub.gradePoints}/${a.totalPoints}` : "Submitted"}
+                      </Badge>
+                    )}
+                    {isStudent && !mySub && a.status === "open" && (
+                      <Badge variant="outline" className="text-muted-foreground">Not submitted</Badge>
+                    )}
+                    {isUrgent && !mySub && <Badge variant="destructive" className="text-[10px]">{days}d left</Badge>}
+                    {isOverdue && !mySub && <Badge variant="destructive" className="text-[10px]">Overdue</Badge>}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{a.description}</p>
                   <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />Due {new Date(a.dueDate).toLocaleDateString()}</span>
                     <span>{a.totalPoints} pts</span>
+                    {isStudent && mySub?.feedback && <span className="text-green-600 italic truncate max-w-[200px]">"{mySub.feedback}"</span>}
                   </div>
                   {canManage && (
                     <div className="mt-3 max-w-sm">
@@ -257,9 +359,11 @@ const Assignments = () => {
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {isStudent && a.status === "open" && (
-                    <Button size="sm" onClick={() => openSubmit(a)}>Submit</Button>
+                    <Button size="sm" className={!mySub ? "gradient-primary text-primary-foreground" : ""} onClick={() => openSubmit(a)}>
+                      {mySub ? "Update" : "Submit"}
+                    </Button>
                   )}
-                  {isStudent && a.status !== "open" && a.status !== "draft" && (
+                  {isStudent && (a.status === "closed" || mySub) && (
                     <Button variant="outline" size="sm" onClick={() => openSubmit(a)}>View</Button>
                   )}
                   {canManage && (
@@ -295,7 +399,10 @@ const Assignments = () => {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Assignments" description={`${assignments.length} assignments total`}>
+      <PageHeader
+        title="Assignments"
+        description={isStudent ? `${studentAssignments.length} assignments` : `${assignments.length} assignments total`}
+      >
         {canManage && (
           <Button size="sm" className="gradient-primary text-primary-foreground" onClick={() => openForm()}>
             <Plus className="h-4 w-4 mr-1" /> New assignment
@@ -303,18 +410,198 @@ const Assignments = () => {
         )}
       </PageHeader>
 
-      <Tabs defaultValue="all">
-        <TabsList>
-          <TabsTrigger value="all">All</TabsTrigger>
-          <TabsTrigger value="open">Open</TabsTrigger>
-          <TabsTrigger value="closed">Closed</TabsTrigger>
-          {canManage && <TabsTrigger value="draft">Draft</TabsTrigger>}
-        </TabsList>
-        <TabsContent value="all" className="mt-4">{renderList("all")}</TabsContent>
-        <TabsContent value="open" className="mt-4">{renderList("open")}</TabsContent>
-        <TabsContent value="closed" className="mt-4">{renderList("closed")}</TabsContent>
-        {canManage && <TabsContent value="draft" className="mt-4">{renderList("draft")}</TabsContent>}
-      </Tabs>
+      {isStudent ? (
+        // Student view — dedicated endpoint returns status baked in, no second API call needed
+        <Tabs defaultValue="pending">
+          <TabsList>
+            <TabsTrigger value="pending">Pending ({studentAssignments.filter((a) => a.studentStatus === "pending").length})</TabsTrigger>
+            <TabsTrigger value="submitted">Submitted ({studentAssignments.filter((a) => a.studentStatus === "submitted").length})</TabsTrigger>
+            <TabsTrigger value="graded">Graded ({studentAssignments.filter((a) => a.studentStatus === "graded").length})</TabsTrigger>
+            <TabsTrigger value="overdue">Overdue ({studentAssignments.filter((a) => a.studentStatus === "overdue").length})</TabsTrigger>
+          </TabsList>
+          {(["pending", "submitted", "graded", "overdue"] as const).map((tab) => (
+            <TabsContent key={tab} value={tab} className="mt-4">
+              {(() => {
+                const list = studentAssignments.filter((a) => a.studentStatus === tab);
+                if (list.length === 0)
+                  return <Card><CardContent className="p-8 text-center text-muted-foreground text-sm">No assignments here.</CardContent></Card>;
+                return (
+                  <div className="space-y-3">
+                    {list.map((a) => {
+                      const days = Math.ceil((new Date(a.dueDate).getTime() - Date.now()) / 86400000);
+                      const asResponse: AssignmentResponse = {
+                        id: a.id, courseId: a.courseId, courseCode: a.courseCode,
+                        courseTitle: a.courseTitle, title: a.title, description: a.description,
+                        dueDate: a.dueDate, totalPoints: a.totalPoints,
+                        status: a.studentStatus === "pending" ? "open" : "closed",
+                        submissionCount: 0, createdByUserId: 0, createdByName: "", createdAt: "", updatedAt: null,
+                      };
+                      return (
+                        <Card key={a.id} className={`hover:shadow-md transition ${a.studentStatus === "pending" ? "border-l-4 border-l-primary" : a.studentStatus === "overdue" ? "border-l-4 border-l-destructive" : ""}`}>
+                          <CardContent className="p-5 flex flex-col md:flex-row md:items-center gap-4">
+                            <div className={`h-12 w-12 rounded-xl flex items-center justify-center shrink-0 ${
+                              a.studentStatus === "graded" ? "bg-green-100 text-green-600" :
+                              a.studentStatus === "submitted" ? "bg-blue-100 text-blue-600" :
+                              a.studentStatus === "overdue" ? "bg-destructive/10 text-destructive" :
+                              "bg-primary/10 text-primary"
+                            }`}>
+                              {a.studentStatus === "graded" ? <CheckCircle className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h3 className="font-semibold">{a.title}</h3>
+                                <Badge variant="outline">{a.courseCode}</Badge>
+                                {a.studentStatus === "graded" && (
+                                  <Badge variant="default">Graded: {a.gradePoints}/{a.totalPoints}</Badge>
+                                )}
+                                {a.studentStatus === "submitted" && (
+                                  <Badge variant="secondary">Submitted</Badge>
+                                )}
+                                {a.studentStatus === "pending" && days <= 3 && (
+                                  <Badge variant="destructive" className="text-[10px]">{days}d left</Badge>
+                                )}
+                                {a.studentStatus === "overdue" && (
+                                  <Badge variant="destructive" className="text-[10px]">Overdue</Badge>
+                                )}
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{a.description}</p>
+                              <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                                <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />Due {new Date(a.dueDate).toLocaleDateString()}</span>
+                                <span>{a.totalPoints} pts</span>
+                                {a.feedback && <span className="text-green-600 italic truncate max-w-[200px]">"{a.feedback}"</span>}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {a.studentStatus === "pending" && (
+                                <Button size="sm" className="gradient-primary text-primary-foreground" onClick={() => openSubmit(asResponse)}>Submit</Button>
+                              )}
+                              {(a.studentStatus === "submitted" || a.studentStatus === "graded") && (
+                                <Button variant="outline" size="sm" onClick={() => openSubmit(asResponse)}>View</Button>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </TabsContent>
+          ))}
+        </Tabs>
+      ) : (
+        // Admin / Professor view
+        <Tabs defaultValue="all">
+          <TabsList>
+            <TabsTrigger value="all">All ({assignments.length})</TabsTrigger>
+            <TabsTrigger value="open">Open ({assignments.filter((a) => a.status === "open").length})</TabsTrigger>
+            <TabsTrigger value="closed">Closed ({assignments.filter((a) => a.status === "closed").length})</TabsTrigger>
+            <TabsTrigger value="draft">Draft ({assignments.filter((a) => a.status === "draft").length})</TabsTrigger>
+            <TabsTrigger value="submissions" onClick={loadAllSubmissions}>Submissions</TabsTrigger>
+          </TabsList>
+          <TabsContent value="all" className="mt-4">{renderList(assignments)}</TabsContent>
+          <TabsContent value="open" className="mt-4">{renderList(assignments.filter((a) => a.status === "open"))}</TabsContent>
+          <TabsContent value="closed" className="mt-4">{renderList(assignments.filter((a) => a.status === "closed"))}</TabsContent>
+          <TabsContent value="draft" className="mt-4">{renderList(assignments.filter((a) => a.status === "draft"))}</TabsContent>
+
+          <TabsContent value="submissions" className="mt-4 space-y-4">
+            {/* Search + status filter */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1 max-w-xs">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search student or assignment..."
+                  className="pl-8"
+                  value={submissionsSearch}
+                  onChange={(e) => setSubmissionsSearch(e.target.value)}
+                />
+              </div>
+              <Select value={submissionsFilter} onValueChange={(v) => setSubmissionsFilter(v as typeof submissionsFilter)}>
+                <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="ungraded">Ungraded</SelectItem>
+                  <SelectItem value="graded">Graded</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {allSubmissionsLoading ? (
+              <div className="flex justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+            ) : (() => {
+              const filtered = allSubmissions.filter((s) => {
+                const matchesFilter =
+                  submissionsFilter === "all" ||
+                  (submissionsFilter === "graded" && s.status === "graded") ||
+                  (submissionsFilter === "ungraded" && s.status !== "graded");
+                const q = submissionsSearch.toLowerCase();
+                const matchesSearch = !q ||
+                  s.studentName.toLowerCase().includes(q) ||
+                  s.studentEmail.toLowerCase().includes(q) ||
+                  s.assignmentTitle.toLowerCase().includes(q) ||
+                  s.courseCode.toLowerCase().includes(q);
+                return matchesFilter && matchesSearch;
+              });
+
+              if (filtered.length === 0) {
+                return (
+                  <Card><CardContent className="p-8 text-center text-muted-foreground text-sm">
+                    {allSubmissionsLoaded ? "No submissions found." : "No submissions yet."}
+                  </CardContent></Card>
+                );
+              }
+
+              return (
+                <Card><CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Student</TableHead>
+                        <TableHead>Assignment</TableHead>
+                        <TableHead>Course</TableHead>
+                        <TableHead>Submitted</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Grade</TableHead>
+                        <TableHead />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filtered.map((s) => (
+                        <TableRow key={s.id}>
+                          <TableCell>
+                            <p className="font-medium text-sm">{s.studentName}</p>
+                            <p className="text-xs text-muted-foreground">{s.studentEmail}</p>
+                          </TableCell>
+                          <TableCell className="text-sm font-medium">{s.assignmentTitle}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{s.courseCode}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{new Date(s.submittedAt).toLocaleDateString()}</TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={s.status === "graded" ? "default" : s.status === "late" ? "destructive" : "secondary"}
+                              className="capitalize"
+                            >
+                              {s.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {s.gradePoints != null ? `${s.gradePoints} / ${s.totalPoints}` : "—"}
+                          </TableCell>
+                          <TableCell>
+                            <Button size="sm" variant="outline" onClick={() => openGradeFromAll(s)}>
+                              <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                              {s.status === "graded" ? "Re-grade" : "Grade"}
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent></Card>
+              );
+            })()}
+          </TabsContent>
+        </Tabs>
+      )}
 
       {/* Create/Edit Dialog */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
@@ -431,8 +718,8 @@ const Assignments = () => {
           )}
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label>Grade (max {selectedAssignment?.totalPoints} pts) *</Label>
-              <Input type="number" min={0} max={selectedAssignment?.totalPoints} value={gradePoints} onChange={(e) => setGradePoints(e.target.value)} />
+              <Label>Grade (max {gradeContext?.totalPoints} pts) *</Label>
+              <Input type="number" min={0} max={gradeContext?.totalPoints} value={gradePoints} onChange={(e) => setGradePoints(e.target.value)} />
             </div>
             <div className="space-y-1.5">
               <Label>Feedback</Label>
@@ -451,7 +738,7 @@ const Assignments = () => {
 
       {/* Submit Dialog (Student) */}
       <Dialog open={submitOpen} onOpenChange={setSubmitOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[520px]">
           <DialogHeader>
             <DialogTitle>{submittingAssignment?.title}</DialogTitle>
           </DialogHeader>
@@ -461,10 +748,18 @@ const Assignments = () => {
           </div>
           {mySubmission?.status === "graded" ? (
             <div className="space-y-3">
-              <div className="bg-muted rounded-md p-3">
-                <p className="text-sm font-medium">Your submission</p>
-                <p className="text-sm mt-1">{mySubmission.submissionText}</p>
-              </div>
+              {mySubmission.submissionText && (
+                <div className="bg-muted rounded-md p-3">
+                  <p className="text-sm font-medium">Your submission</p>
+                  <p className="text-sm mt-1">{mySubmission.submissionText}</p>
+                </div>
+              )}
+              {(() => { const att = parseAttachmentUrl(mySubmission.attachmentUrl); return att ? (
+                <a href={getAttachmentDownloadUrl(att.stored)} target="_blank" rel="noreferrer"
+                  className="flex items-center gap-2 text-sm text-primary hover:underline">
+                  <Paperclip className="h-3.5 w-3.5" />{att.name}
+                </a>
+              ) : null; })()}
               <div className="bg-green-50 dark:bg-green-950 rounded-md p-3 space-y-1">
                 <p className="text-sm font-medium text-green-700 dark:text-green-300">Grade: {mySubmission.gradePoints} / {submittingAssignment?.totalPoints}</p>
                 {mySubmission.feedback && <p className="text-sm text-muted-foreground">{mySubmission.feedback}</p>}
@@ -479,14 +774,52 @@ const Assignments = () => {
               )}
               <div className="space-y-1.5">
                 <Label>Submission text</Label>
-                <Textarea rows={5} value={submissionText} onChange={(e) => setSubmissionText(e.target.value)} placeholder="Write your answer here..." disabled={submittingAssignment?.status !== "open"} />
+                <Textarea rows={4} value={submissionText} onChange={(e) => setSubmissionText(e.target.value)} placeholder="Write your answer here..." disabled={submittingAssignment?.status !== "open"} />
               </div>
+              {submittingAssignment?.status === "open" && (
+                <div className="space-y-1.5">
+                  <Label>Attachment (optional)</Label>
+                  {submissionFile ? (
+                    <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+                      <Paperclip className="h-4 w-4 text-primary shrink-0" />
+                      <span className="flex-1 truncate">{submissionFile.name}</span>
+                      <button type="button" onClick={() => setSubmissionFile(null)} className="text-muted-foreground hover:text-destructive">
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {(() => { const att = parseAttachmentUrl(mySubmission?.attachmentUrl ?? null); return att ? (
+                        <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm text-muted-foreground">
+                          <Paperclip className="h-4 w-4 shrink-0" />
+                          <span className="flex-1 truncate">Current: {att.name}</span>
+                        </div>
+                      ) : null; })()}
+                      <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground hover:border-primary hover:text-primary transition">
+                        <Paperclip className="h-4 w-4" />
+                        <span>Click to attach a file (PDF, ZIP, DOCX, …)</span>
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept=".pdf,.doc,.docx,.ppt,.pptx,.png,.jpg,.jpeg,.txt,.zip,.rar,.7z"
+                          onChange={(e) => setSubmissionFile(e.target.files?.[0] ?? null)}
+                        />
+                      </label>
+                    </>
+                  )}
+                  <p className="text-xs text-muted-foreground">Max 50 MB · PDF, DOCX, PPTX, ZIP, RAR, 7z, images, TXT</p>
+                </div>
+              )}
             </div>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setSubmitOpen(false)}>Close</Button>
             {mySubmission?.status !== "graded" && submittingAssignment?.status === "open" && (
-              <Button onClick={handleSubmit} disabled={submitLoading || !submissionText.trim()} className="gradient-primary text-primary-foreground">
+              <Button
+                onClick={handleSubmit}
+                disabled={submitLoading || (!submissionText.trim() && !submissionFile)}
+                className="gradient-primary text-primary-foreground"
+              >
                 {submitLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                 {mySubmission ? "Update submission" : "Submit"}
               </Button>
