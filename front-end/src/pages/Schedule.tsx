@@ -1,16 +1,36 @@
+import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useState } from "react";
-import { useAppStore } from "@/store/useAppStore";
+import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { getScheduleApi, type ScheduleEntry } from "@/lib/scheduleService";
+import { toast } from "@/hooks/use-toast";
+
+const COLORS = [
+  "230 75% 56%", "160 60% 45%", "280 65% 55%",
+  "25 90% 55%", "340 70% 55%", "190 70% 45%",
+];
 
 const days = ["Mon", "Tue", "Wed", "Thu", "Fri"];
-const hours = Array.from({ length: 10 }, (_, i) => i + 8); // 8 - 17
+const hours = Array.from({ length: 10 }, (_, i) => i + 8);
 
 const Schedule = () => {
-  const { schedule } = useAppStore();
+  const [entries, setEntries] = useState<ScheduleEntry[]>([]);
+  const [loading, setLoading] = useState(true);
   const [weekOffset, setWeekOffset] = useState(0);
+
+  useEffect(() => {
+    getScheduleApi()
+      .then(setEntries)
+      .catch(() => toast({ title: "Failed to load schedule", variant: "destructive" }))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return (
+    <div className="flex items-center justify-center h-64">
+      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -31,20 +51,21 @@ const Schedule = () => {
               <>
                 <div key={`h-${h}`} className="border-b border-r p-2 text-xs text-muted-foreground text-right pr-3">{h}:00</div>
                 {days.map((_, dayIdx) => {
-                  const event = schedule.find((e) => e.day === dayIdx + 1 && e.startHour === h);
+                  const event = entries.find((e) => e.dayNumber === dayIdx + 1 && e.startHour === h);
                   return (
                     <div key={`${h}-${dayIdx}`} className="border-b border-r p-1 min-h-[60px] relative">
                       {event && (
                         <div
                           className="absolute inset-1 rounded-lg p-2 text-white text-xs shadow-md hover:shadow-lg transition cursor-pointer"
                           style={{
-                            background: `linear-gradient(135deg, hsl(${event.color}), hsl(${event.color} / 0.8))`,
+                            background: `linear-gradient(135deg, hsl(${COLORS[event.courseId % COLORS.length]}), hsl(${COLORS[event.courseId % COLORS.length]} / 0.8))`,
                             height: `${(event.endHour - event.startHour) * 60 - 8}px`,
                           }}
                         >
-                          <div className="font-bold">{event.title}</div>
-                          <div className="opacity-90 text-[10px]">{event.room}</div>
-                          <div className="opacity-80 text-[10px] mt-1">{event.startHour}:00 - {event.endHour}:00</div>
+                          <div className="font-bold">{event.courseCode}</div>
+                          <div className="opacity-90 text-[10px] truncate">{event.courseTitle}</div>
+                          {event.room && <div className="opacity-80 text-[10px]">{event.room}</div>}
+                          <div className="opacity-80 text-[10px] mt-1">{event.startHour}:00 – {event.endHour}:00</div>
                         </div>
                       )}
                     </div>
@@ -55,6 +76,10 @@ const Schedule = () => {
           </div>
         </CardContent>
       </Card>
+
+      {entries.length === 0 && (
+        <p className="text-center text-muted-foreground text-sm">No schedule entries found. Ask an admin to add course schedules.</p>
+      )}
     </div>
   );
 };

@@ -11,10 +11,12 @@ namespace WebAPI.Controllers
     public class AuthController : ControllerBase
     {
         private readonly IAuthService _authService;
+        private readonly IAuditLogService _audit;
 
-        public AuthController(IAuthService authService)
+        public AuthController(IAuthService authService, IAuditLogService audit)
         {
             _authService = authService;
+            _audit = audit;
         }
 
         [HttpPost("register")]
@@ -34,7 +36,10 @@ namespace WebAPI.Controllers
             var result = await _authService.LoginAsync(dto);
 
             if (result.Data != null)
+            {
+                await _audit.LogAsync(result.Data.Id, "LOGIN", "User", result.Data.Id.ToString(), $"Role: {result.Data.Role}", HttpContext.Connection.RemoteIpAddress?.ToString());
                 return Ok(result.Data);
+            }
 
             if (result.IsPending || result.IsRejected)
                 return StatusCode(403, new { message = result.ErrorMessage });
