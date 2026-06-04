@@ -14,6 +14,9 @@ namespace WebAPI.DTOs
         [Required]
         [MinLength(6)]
         public string Password { get; set; } = string.Empty;
+
+        [MaxLength(100)]
+        public string Department { get; set; } = string.Empty;
     }
 
     public class AddProfessorDto
@@ -56,6 +59,7 @@ namespace WebAPI.DTOs
         public int Id { get; set; }
         public string FullName { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
+        public string Department { get; set; } = string.Empty;
         public string Status { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; }
     }
@@ -68,5 +72,8 @@ namespace WebAPI.DTOs
         [Required]
         [EmailAddress]
         public string Email { get; set; } = string.Empty;
+
+        [MaxLength(100)]
+        public string? Department { get; set; }
     }
 }

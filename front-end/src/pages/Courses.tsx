@@ -113,7 +113,7 @@ const Courses = () => {
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by code or title..." className="pl-9" />
           </div>
-          {!isProfessor && (
+          {isAdmin && (
             <Select value={dept} onValueChange={setDept}>
               <SelectTrigger className="w-full md:w-48"><SelectValue /></SelectTrigger>
               <SelectContent>

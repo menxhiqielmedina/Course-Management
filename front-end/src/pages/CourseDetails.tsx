@@ -22,7 +22,7 @@ import {
   type CourseResponse, type EnrolledStudent,
 } from "@/lib/courseService";
 import { getAssignmentsApi, type AssignmentResponse } from "@/lib/assignmentService";
-import { getFilesApi, getDownloadUrl, type FileResourceResponse } from "@/lib/fileService";
+import { getFilesApi, downloadFileApi, viewFileApi, type FileResourceResponse } from "@/lib/fileService";
 import api from "@/lib/api";
 
 const COURSE_COLORS = [
@@ -250,9 +250,12 @@ const CourseDetails = () => {
                   <FileText className="h-5 w-5 text-primary" />
                   <div><p className="font-medium text-sm">{f.originalFileName}</p><p className="text-xs text-muted-foreground">{f.sizeFormatted} · {new Date(f.uploadedAt).toLocaleDateString()}</p></div>
                 </div>
-                <Button variant="outline" size="sm" asChild>
-                  <a href={getDownloadUrl(f.id)} download={f.originalFileName}>Download</a>
-                </Button>
+                <div className="flex gap-2">
+                  {(f.contentType.startsWith("image/") || f.contentType === "application/pdf") && (
+                    <Button variant="outline" size="sm" onClick={() => viewFileApi(f.id, f.contentType)}>View</Button>
+                  )}
+                  <Button variant="outline" size="sm" onClick={() => downloadFileApi(f.id, f.originalFileName)}>Download</Button>
+                </div>
               </CardContent></Card>
             ))}
         </TabsContent>

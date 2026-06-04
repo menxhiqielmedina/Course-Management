@@ -92,8 +92,8 @@ namespace WebAPI.Services
                 if (user?.Role == "professor")
                 {
                     var professor = await _context.Professors.FirstOrDefaultAsync(p => p.UserId == userId);
-                    if (professor == null || course.ProfessorId != professor.Id)
-                        return (null, "You can only upload files to courses assigned to you.");
+                    if (professor == null || course.Department != professor.Department)
+                        return (null, "You can only upload files to courses in your department.");
                 }
             }
             var storedName = $"{Guid.NewGuid()}{ext}";

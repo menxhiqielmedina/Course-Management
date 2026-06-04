@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { useAppStore } from "@/store/useAppStore";
 import { toast } from "@/hooks/use-toast";
 import {
-  getFilesApi, uploadFileApi, deleteFileApi, getDownloadUrl,
+  getFilesApi, uploadFileApi, deleteFileApi, downloadFileApi, viewFileApi,
   type FileResourceResponse,
 } from "@/lib/fileService";
 import { getCoursesApi, type CourseResponse } from "@/lib/courseService";
@@ -114,19 +114,13 @@ const Files = () => {
   };
 
   const handleDownload = (f: FileResourceResponse) => {
-    const token = (() => {
-      try { return JSON.parse(localStorage.getItem("cms-app-store") ?? "{}")?.state?.token; } catch { return null; }
-    })();
-    fetch(getDownloadUrl(f.id), { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => r.blob())
-      .then((blob) => {
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = f.originalFileName;
-        a.click();
-        URL.revokeObjectURL(a.href);
-      })
+    downloadFileApi(f.id, f.originalFileName)
       .catch(() => toast({ title: "Download failed", variant: "destructive" }));
+  };
+
+  const handleView = (f: FileResourceResponse) => {
+    viewFileApi(f.id, f.contentType)
+      .catch(() => toast({ title: "Could not open file", variant: "destructive" }));
   };
 
   if (loading) return (
@@ -196,7 +190,12 @@ const Files = () => {
                       <p>{new Date(f.uploadedAt).toLocaleDateString()}</p>
                     </div>
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition">
-                      <Button variant="ghost" size="sm" onClick={() => handleDownload(f)}>
+                      {(f.contentType.startsWith("image/") || f.contentType === "application/pdf") && (
+                        <Button variant="ghost" size="sm" onClick={() => handleView(f)} title="View">
+                          <FileText className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                      <Button variant="ghost" size="sm" onClick={() => handleDownload(f)} title="Download">
                         <Download className="h-3.5 w-3.5" />
                       </Button>
                       {canUpload && (

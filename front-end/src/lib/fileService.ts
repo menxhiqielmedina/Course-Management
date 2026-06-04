@@ -38,9 +38,23 @@ export async function uploadFileApi(
   return data;
 }
 
-export function getDownloadUrl(id: number): string {
-  const base = import.meta.env.VITE_API_URL ?? "";
-  return `${base}/files/${id}/download`;
+export async function downloadFileApi(id: number, fileName: string): Promise<void> {
+  const response = await api.get(`/files/${id}/download`, { responseType: "blob" });
+  const url = window.URL.createObjectURL(new Blob([response.data]));
+  const link = document.createElement("a");
+  link.href = url;
+  link.setAttribute("download", fileName);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+export async function viewFileApi(id: number, contentType: string): Promise<void> {
+  const response = await api.get(`/files/${id}/download`, { responseType: "blob" });
+  const blob = new Blob([response.data], { type: contentType });
+  const url = window.URL.createObjectURL(blob);
+  window.open(url, "_blank");
 }
 
 export async function deleteFileApi(id: number): Promise<void> {

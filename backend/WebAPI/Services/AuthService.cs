@@ -55,6 +55,7 @@ namespace WebAPI.Services
                     UserId = user.Id,
                     FullName = user.FullName,
                     Email = user.Email,
+                    Department = dto.Department.Trim(),
                     CreatedAt = user.CreatedAt
                 });
                 await _context.SaveChangesAsync();

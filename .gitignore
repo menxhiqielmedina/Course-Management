@@ -2,3 +2,7 @@
 node_modules/
 bin/
 obj/
+
+# Local developer overrides — copy appsettings.json and rename to override your connection string
+backend/WebAPI/appsettings.Local.json
+backend/WebAPI/appsettings.Development.json

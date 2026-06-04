@@ -45,6 +45,7 @@ export function CourseFormDialog({ open, onOpenChange, course, onSaved }: Props)
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    if (!open) return;
     api.get<Professor[]>("/admin/professors").then((r) => setProfessors(r.data)).catch(() => {
       toast({ title: "Could not load professors", variant: "destructive" });
     });

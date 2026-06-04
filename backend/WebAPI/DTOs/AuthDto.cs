@@ -25,6 +25,9 @@ namespace WebAPI.DTOs
         public string Password { get; set; } = string.Empty;
 
         public string Role { get; set; } = "student";
+
+        [MaxLength(100)]
+        public string Department { get; set; } = string.Empty;
     }
 
     public class LoginRequestDto
