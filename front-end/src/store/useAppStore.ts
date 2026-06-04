@@ -2,11 +2,15 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import {
   mockCourses, mockStudents, mockProfessors, mockAssignments,
-  mockNotifications, mockSchedule, mockFiles, mockAuditLogs,
+  mockSchedule, mockFiles, mockAuditLogs,
   type Course, type Student, type Professor, type Assignment,
-  type Notification, type ScheduleEvent, type FileItem, type AuditLog,
+  type ScheduleEvent, type FileItem, type AuditLog,
   type Role, type User,
 } from "@/data/mockData";
+import {
+  getMyNotifications, markNotificationAsRead, markAllNotificationsAsRead, deleteNotification,
+  type NotificationItem,
+} from "@/api/notificationApi";
 
 interface AppState {
   // Auth
@@ -26,15 +30,22 @@ interface AppState {
   theme: "light" | "dark";
   toggleTheme: () => void;
 
-  // Data
+  // Mock data (to be replaced per module)
   courses: Course[];
   students: Student[];
   professors: Professor[];
   assignments: Assignment[];
-  notifications: Notification[];
   schedule: ScheduleEvent[];
   files: FileItem[];
   auditLogs: AuditLog[];
+
+  // Notifications (real API)
+  notifications: NotificationItem[];
+  setNotifications: (items: NotificationItem[]) => void;
+  loadNotifications: () => Promise<void>;
+  markNotificationRead: (id: number) => void;
+  markAllNotificationsRead: () => void;
+  removeNotification: (id: number) => void;
 
   // CRUD - courses
   addCourse: (c: Omit<Course, "id">) => void;
@@ -55,18 +66,13 @@ interface AppState {
   addAssignment: (a: Omit<Assignment, "id">) => void;
   updateAssignment: (id: string, a: Partial<Assignment>) => void;
   deleteAssignment: (id: string) => void;
-
-  // Notifications
-  markNotificationRead: (id: string) => void;
-  markAllNotificationsRead: () => void;
-  addNotification: (n: Omit<Notification, "id" | "timestamp" | "read">) => void;
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
 export const useAppStore = create<AppState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       token: null,
       mustChangePassword: false,
@@ -78,7 +84,7 @@ export const useAppStore = create<AppState>()(
         set({ user: { id: String(id), name: fullName, email, role }, token, mustChangePassword });
       },
       clearMustChangePassword: () => set({ mustChangePassword: false }),
-      logout: () => set({ user: null, token: null, mustChangePassword: false }),
+      logout: () => set({ user: null, token: null, mustChangePassword: false, notifications: [] }),
 
       pendingStudentCount: 0,
       setPendingStudentCount: (n) => set({ pendingStudentCount: n }),
@@ -97,10 +103,34 @@ export const useAppStore = create<AppState>()(
       students: mockStudents,
       professors: mockProfessors,
       assignments: mockAssignments,
-      notifications: mockNotifications,
       schedule: mockSchedule,
       files: mockFiles,
       auditLogs: mockAuditLogs,
+
+      // Notifications — real API
+      notifications: [],
+      setNotifications: (items) => set({ notifications: items }),
+      loadNotifications: async () => {
+        try {
+          const items = await getMyNotifications();
+          set({ notifications: items });
+        } catch { /* ignore if not logged in */ }
+      },
+      markNotificationRead: (id) => {
+        markNotificationAsRead(id).catch(() => {});
+        set((s) => ({
+          notifications: s.notifications.map((n) => n.id === id ? { ...n, isRead: true } : n),
+        }));
+      },
+      markAllNotificationsRead: () => {
+        const userId = get().user?.id;
+        if (userId) markAllNotificationsAsRead(Number(userId)).catch(() => {});
+        set((s) => ({ notifications: s.notifications.map((n) => ({ ...n, isRead: true })) }));
+      },
+      removeNotification: (id) => {
+        deleteNotification(id).catch(() => {});
+        set((s) => ({ notifications: s.notifications.filter((n) => n.id !== id) }));
+      },
 
       addCourse: (c) => set((s) => ({ courses: [{ ...c, id: uid() }, ...s.courses] })),
       updateCourse: (id, c) => set((s) => ({ courses: s.courses.map((x) => (x.id === id ? { ...x, ...c } : x)) })),
@@ -117,18 +147,6 @@ export const useAppStore = create<AppState>()(
       addAssignment: (a) => set((s) => ({ assignments: [{ ...a, id: uid() }, ...s.assignments] })),
       updateAssignment: (id, a) => set((s) => ({ assignments: s.assignments.map((x) => (x.id === id ? { ...x, ...a } : x)) })),
       deleteAssignment: (id) => set((s) => ({ assignments: s.assignments.filter((x) => x.id !== id) })),
-
-      markNotificationRead: (id) =>
-        set((s) => ({ notifications: s.notifications.map((n) => (n.id === id ? { ...n, read: true } : n)) })),
-      markAllNotificationsRead: () =>
-        set((s) => ({ notifications: s.notifications.map((n) => ({ ...n, read: true })) })),
-      addNotification: (n) =>
-        set((s) => ({
-          notifications: [
-            { ...n, id: uid(), timestamp: new Date().toISOString(), read: false },
-            ...s.notifications,
-          ],
-        })),
     }),
     {
       name: "cms-app-store",

@@ -1,4 +1,5 @@
-import { Bell, Moon, Sun, Search, LogOut, User as UserIcon, ArrowRight } from "lucide-react";
+import { useEffect } from "react";
+import { Bell, Moon, Sun, Search, LogOut, User as UserIcon } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,8 +17,16 @@ import { formatDistanceToNow } from "date-fns";
 
 export function TopNavbar() {
   const navigate = useNavigate();
-  const { user, logout, theme, toggleTheme, notifications, markAllNotificationsRead, markNotificationRead } = useAppStore();
-  const unread = notifications.filter((n) => !n.read).length;
+  const {
+    user, logout, theme, toggleTheme,
+    notifications, loadNotifications, markNotificationRead, markAllNotificationsRead,
+  } = useAppStore();
+
+  const unread = notifications.filter((n) => !n.isRead).length;
+
+  useEffect(() => {
+    if (user) loadNotifications();
+  }, [user]);
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b bg-background/80 px-4 backdrop-blur-xl">
@@ -30,7 +39,8 @@ export function TopNavbar() {
         <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label="Toggle theme">
           {theme === "light" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
         </Button>
-        {user?.role === "admin" && <Popover>
+
+        <Popover>
           <PopoverTrigger asChild>
             <Button variant="ghost" size="icon" className="relative" aria-label="Notifications">
               <Bell className="h-4 w-4" />
@@ -44,19 +54,20 @@ export function TopNavbar() {
           <PopoverContent align="end" className="w-80 p-0">
             <div className="flex items-center justify-between border-b p-3">
               <h4 className="font-semibold text-sm">Notifications</h4>
-              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={markAllNotificationsRead}>
-                Mark all read
-              </Button>
+              {unread > 0 && (
+                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={markAllNotificationsRead}>
+                  Mark all read
+                </Button>
+              )}
             </div>
             <div className="max-h-80 overflow-y-auto">
-              {notifications.slice(0, 6).map((n) => (
+              {notifications.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center p-6">No notifications</p>
+              ) : notifications.slice(0, 6).map((n) => (
                 <button
                   key={n.id}
-                  onClick={() => {
-                    markNotificationRead(n.id);
-                    if (n.link) navigate(n.link);
-                  }}
-                  className={`w-full text-left p-3 border-b hover:bg-muted/50 transition ${!n.read ? "bg-accent/40" : ""}`}
+                  onClick={() => markNotificationRead(n.id)}
+                  className={`w-full text-left p-3 border-b hover:bg-muted/50 transition ${!n.isRead ? "bg-accent/40" : ""}`}
                 >
                   <div className="flex items-start gap-2">
                     <div className={`mt-1.5 h-2 w-2 rounded-full shrink-0 ${
@@ -68,18 +79,24 @@ export function TopNavbar() {
                       <p className="text-sm font-medium truncate">{n.title}</p>
                       <p className="text-xs text-muted-foreground line-clamp-2">{n.message}</p>
                       <p className="text-[10px] text-muted-foreground mt-1">
-                        {formatDistanceToNow(new Date(n.timestamp), { addSuffix: true })}
+                        {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}
                       </p>
                     </div>
-                    {n.link && (
-                      <ArrowRight className="h-3.5 w-3.5 shrink-0 mt-1 text-muted-foreground" />
-                    )}
                   </div>
                 </button>
               ))}
+              {notifications.length > 0 && (
+                <button
+                  className="w-full text-xs text-primary text-center p-2 hover:bg-muted/50 transition"
+                  onClick={() => navigate("/notifications")}
+                >
+                  View all notifications
+                </button>
+              )}
             </div>
           </PopoverContent>
-        </Popover>}
+        </Popover>
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="gap-2 px-2">

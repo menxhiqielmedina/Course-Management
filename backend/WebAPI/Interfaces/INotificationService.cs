@@ -4,10 +4,13 @@ namespace WebAPI.Interfaces
 {
     public interface INotificationService
     {
-        Task<List<NotificationDto>> GetForUserAsync(int userId);
-        Task<bool> MarkReadAsync(int id, int userId);
-        Task MarkAllReadAsync(int userId);
-        Task<NotificationDto> CreateAsync(int userId, string title, string message, string type = "info");
+        Task<List<NotificationDto>> GetAllAsync();
+        Task<List<NotificationDto>> GetByUserIdAsync(int userId);
+        Task<NotificationDto?> GetByIdAsync(int id);
+        Task<NotificationDto> CreateAsync(CreateNotificationDto dto);
+        Task<bool> MarkAsReadAsync(int id);
+        Task MarkAllAsReadAsync(int userId);
+        Task<bool> DeleteAsync(int id);
         Task<int> GetUnreadCountAsync(int userId);
     }
 }
