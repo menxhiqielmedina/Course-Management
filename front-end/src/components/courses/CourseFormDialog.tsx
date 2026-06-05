@@ -134,7 +134,15 @@ export function CourseFormDialog({ open, onOpenChange, course, onSaved }: Props)
           </div>
           <div className="space-y-1.5">
             <Label>Department</Label>
-            <Select value={form.department} onValueChange={(v) => setForm({ ...form, department: v })}>
+            <Select
+              value={form.department}
+              onValueChange={(v) => {
+                const selectedProfStillValid = professors.find(
+                  (p) => p.id === form.professorId && p.department === v
+                );
+                setForm({ ...form, department: v, professorId: selectedProfStillValid ? form.professorId : null });
+              }}
+            >
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {DEPARTMENTS.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
@@ -150,13 +158,18 @@ export function CourseFormDialog({ open, onOpenChange, course, onSaved }: Props)
               <SelectTrigger><SelectValue placeholder="Select professor" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">— None —</SelectItem>
-                {professors.map((p) => (
-                  <SelectItem key={p.id} value={String(p.id)}>
-                    {p.fullName} {p.department ? `· ${p.department}` : ""}
-                  </SelectItem>
-                ))}
+                {professors
+                  .filter((p) => p.department === form.department)
+                  .map((p) => (
+                    <SelectItem key={p.id} value={String(p.id)}>
+                      {p.fullName}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
+            {professors.filter((p) => p.department === form.department).length === 0 && (
+              <p className="text-xs text-muted-foreground">No professors in this department.</p>
+            )}
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="capacity">Capacity *</Label>

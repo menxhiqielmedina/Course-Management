@@ -36,7 +36,7 @@ const COURSE_COLORS = [
 ];
 const courseColor = (id: number) => COURSE_COLORS[id % COURSE_COLORS.length];
 
-interface StudentOption { id: number; fullName: string; email: string; }
+interface StudentOption { id: number; fullName: string; email: string; department: string; }
 
 const CourseDetails = () => {
   const { id } = useParams();
@@ -189,6 +189,7 @@ const CourseDetails = () => {
 
   const filteredStudents = allStudents.filter((s) =>
     !enrolled.some((e) => e.studentId === s.id) &&
+    s.department === course?.department &&
     (s.fullName.toLowerCase().includes(studentSearch.toLowerCase()) ||
       s.email.toLowerCase().includes(studentSearch.toLowerCase()))
   );
