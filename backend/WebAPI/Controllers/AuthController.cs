@@ -12,22 +12,25 @@ namespace WebAPI.Controllers
     {
         private readonly IAuthService _authService;
         private readonly IAuditLogService _audit;
+        private readonly IConfiguration _config;
 
-        public AuthController(IAuthService authService, IAuditLogService audit)
+        public AuthController(IAuthService authService, IAuditLogService audit, IConfiguration config)
         {
             _authService = authService;
             _audit = audit;
+            _config = config;
         }
 
         [HttpPost("register")]
         public async Task<IActionResult> Register(RegisterRequestDto dto)
         {
-            var user = await _authService.RegisterAsync(dto);
-
-            if (user == null)
+            var result = await _authService.RegisterAsync(dto);
+            if (result == null)
                 return BadRequest(new { message = "Email already exists." });
 
-            return Ok(user);
+            SetRefreshCookie(result.RefreshToken!);
+            result.RefreshToken = null;
+            return Ok(result);
         }
 
         [HttpPost("login")]
@@ -37,6 +40,8 @@ namespace WebAPI.Controllers
 
             if (result.Data != null)
             {
+                SetRefreshCookie(result.Data.RefreshToken!);
+                result.Data.RefreshToken = null;
                 await _audit.LogAsync(result.Data.Id, "LOGIN", "User", result.Data.Id.ToString(), $"Role: {result.Data.Role}", HttpContext.Connection.RemoteIpAddress?.ToString());
                 return Ok(result.Data);
             }
@@ -45,6 +50,33 @@ namespace WebAPI.Controllers
                 return StatusCode(403, new { message = result.ErrorMessage });
 
             return Unauthorized(new { message = result.ErrorMessage });
+        }
+
+        [HttpPost("refresh")]
+        public async Task<IActionResult> Refresh()
+        {
+            if (!Request.Cookies.TryGetValue("refreshToken", out var token))
+                return Unauthorized(new { message = "No refresh token." });
+
+            var result = await _authService.RefreshAsync(token);
+            if (result == null)
+            {
+                ClearRefreshCookie();
+                return Unauthorized(new { message = "Refresh token is invalid or expired. Please log in again." });
+            }
+
+            SetRefreshCookie(result.RefreshToken!);
+            result.RefreshToken = null;
+            return Ok(result);
+        }
+
+        [HttpPost("logout")]
+        public async Task<IActionResult> Logout()
+        {
+            Request.Cookies.TryGetValue("refreshToken", out var token);
+            await _authService.RevokeAsync(token);
+            ClearRefreshCookie();
+            return Ok();
         }
 
         [HttpPost("change-password")]
@@ -64,5 +96,27 @@ namespace WebAPI.Controllers
 
             return Ok(new { message = "Password changed successfully." });
         }
+
+        private void SetRefreshCookie(string token)
+        {
+            var days = int.Parse(_config["JwtSettings:RefreshTokenDays"] ?? "7");
+            Response.Cookies.Append("refreshToken", token, new CookieOptions
+            {
+                HttpOnly = true,
+                SameSite = SameSiteMode.Strict,
+                Secure = false,  // set true behind HTTPS in production
+                Expires = DateTimeOffset.UtcNow.AddDays(days),
+                Path = "/"
+            });
+        }
+
+        private void ClearRefreshCookie() =>
+            Response.Cookies.Delete("refreshToken", new CookieOptions
+            {
+                HttpOnly = true,
+                SameSite = SameSiteMode.Strict,
+                Secure = false,
+                Path = "/"
+            });
     }
 }

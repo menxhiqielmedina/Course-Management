@@ -1,5 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -38,7 +39,6 @@ namespace WebAPI.Services
                 FullName = dto.FullName.Trim(),
                 Email = email,
                 Role = role,
-                // Students self-registering must be approved by an admin first
                 Status = role == "student" ? "pending" : "approved",
                 CreatedAt = DateTime.UtcNow
             };
@@ -73,9 +73,8 @@ namespace WebAPI.Services
                 await _context.SaveChangesAsync();
             }
 
-            return MapToResponse(user);
+            return await IssueTokensAsync(user);
         }
-
 
         public async Task<LoginResult> LoginAsync(LoginRequestDto dto)
         {
@@ -95,15 +94,76 @@ namespace WebAPI.Services
             if (user.Status == "rejected")
                 return new LoginResult { IsRejected = true, ErrorMessage = "Your account registration was rejected." };
 
-            return new LoginResult { Data = MapToResponse(user) };
+            return new LoginResult { Data = await IssueTokensAsync(user) };
         }
 
-        private string GenerateJwtToken(User user)
+        public async Task<AuthResponseDto?> RefreshAsync(string refreshToken)
+        {
+            var hashed = HashToken(refreshToken);
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.RefreshToken == hashed);
+
+            if (user == null || user.RefreshTokenExpiry == null || user.RefreshTokenExpiry < DateTime.UtcNow)
+                return null;
+
+            return await IssueTokensAsync(user);
+        }
+
+        public async Task RevokeAsync(string? refreshToken)
+        {
+            if (string.IsNullOrEmpty(refreshToken)) return;
+
+            var hashed = HashToken(refreshToken);
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.RefreshToken == hashed);
+            if (user == null) return;
+
+            user.RefreshToken = null;
+            user.RefreshTokenExpiry = null;
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task<bool> ChangePasswordAsync(int userId, ChangePasswordDto dto)
+        {
+            var user = await _context.Users.FindAsync(userId);
+            if (user == null) return false;
+
+            var result = _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, dto.CurrentPassword);
+            if (result == PasswordVerificationResult.Failed) return false;
+
+            user.PasswordHash = _passwordHasher.HashPassword(user, dto.NewPassword);
+            user.MustChangePassword = false;
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        // Generates both tokens, persists the refresh token hash, and returns the DTO.
+        private async Task<AuthResponseDto> IssueTokensAsync(User user)
+        {
+            var accessToken = GenerateAccessToken(user);
+            var (plainRefresh, hashedRefresh) = GenerateRefreshToken();
+
+            var days = int.Parse(_config["JwtSettings:RefreshTokenDays"] ?? "7");
+            user.RefreshToken = hashedRefresh;
+            user.RefreshTokenExpiry = DateTime.UtcNow.AddDays(days);
+            await _context.SaveChangesAsync();
+
+            return new AuthResponseDto
+            {
+                Id = user.Id,
+                FullName = user.FullName,
+                Email = user.Email,
+                Role = user.Role,
+                MustChangePassword = user.MustChangePassword,
+                AccessToken = accessToken,
+                RefreshToken = plainRefresh,  // controller reads this, then nulls it before sending JSON
+            };
+        }
+
+        private string GenerateAccessToken(User user)
         {
             var secret = _config["JwtSettings:Secret"]!;
             var issuer = _config["JwtSettings:Issuer"]!;
             var audience = _config["JwtSettings:Audience"]!;
-            var hours = int.Parse(_config["JwtSettings:ExpirationHours"] ?? "24");
+            var minutes = int.Parse(_config["JwtSettings:AccessTokenMinutes"] ?? "15");
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -120,12 +180,22 @@ namespace WebAPI.Services
                 issuer: issuer,
                 audience: audience,
                 claims: claims,
-                expires: DateTime.UtcNow.AddHours(hours),
+                expires: DateTime.UtcNow.AddMinutes(minutes),
                 signingCredentials: creds
             );
 
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
+
+        private static (string plain, string hashed) GenerateRefreshToken()
+        {
+            var bytes = RandomNumberGenerator.GetBytes(64);
+            var plain = Convert.ToBase64String(bytes);
+            return (plain, HashToken(plain));
+        }
+
+        private static string HashToken(string token) =>
+            Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
 
         private static string NormalizeRole(string? role) =>
             role?.ToLower() switch
@@ -134,29 +204,5 @@ namespace WebAPI.Services
                 "professor" => "professor",
                 _ => "student"
             };
-
-        public async Task<bool> ChangePasswordAsync(int userId, ChangePasswordDto dto)
-        {
-            var user = await _context.Users.FindAsync(userId);
-            if (user == null) return false;
-
-            var result = _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, dto.CurrentPassword);
-            if (result == PasswordVerificationResult.Failed) return false;
-
-            user.PasswordHash = _passwordHasher.HashPassword(user, dto.NewPassword);
-            user.MustChangePassword = false;
-            await _context.SaveChangesAsync();
-            return true;
-        }
-
-        private AuthResponseDto MapToResponse(User user) => new()
-        {
-            Id = user.Id,
-            FullName = user.FullName,
-            Email = user.Email,
-            Role = user.Role,
-            MustChangePassword = user.MustChangePassword,
-            Token = GenerateJwtToken(user)
-        };
     }
 }

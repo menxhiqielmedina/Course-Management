@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -6,6 +6,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppLayout } from "./components/layout/AppLayout";
 import NotFound from "./pages/NotFound.tsx";
+import { registerAuthCallbacks } from "@/lib/api";
+import { useAppStore } from "@/store/useAppStore";
 
 const Login = lazy(() => import("./pages/Login"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
@@ -37,12 +39,32 @@ const Loader = () => (
   </div>
 );
 
+const AppInit = () => {
+  const setToken = useAppStore((s) => s.setToken);
+  const logout = useAppStore((s) => s.logout);
+
+  useEffect(() => {
+    // Token is never persisted to localStorage — it lives in memory only.
+    // On page reload the 401 interceptor will silently refresh it via the HttpOnly cookie.
+    registerAuthCallbacks(
+      (newToken) => setToken(newToken),
+      () => {
+        logout();
+        window.location.replace("/login");
+      }
+    );
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return null;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
       <Sonner />
       <BrowserRouter>
+        <AppInit />
         <Suspense fallback={<Loader />}>
           <Routes>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />

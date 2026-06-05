@@ -11,6 +11,7 @@ import {
   getMyNotifications, markNotificationAsRead, markAllNotificationsAsRead, deleteNotification,
   type NotificationItem,
 } from "@/api/notificationApi";
+import { setAuthToken } from "@/lib/api";
 
 interface AppState {
   // Auth
@@ -19,6 +20,7 @@ interface AppState {
   mustChangePassword: boolean;
   login: (email: string, role: Role) => void;
   loginFromApi: (id: number, fullName: string, email: string, role: Role, token: string, mustChangePassword: boolean) => void;
+  setToken: (token: string) => void;
   clearMustChangePassword: () => void;
   logout: () => void;
 
@@ -81,10 +83,18 @@ export const useAppStore = create<AppState>()(
         set({ user: { id: uid(), name: name || "User", email, role }, token: null, mustChangePassword: false });
       },
       loginFromApi: (id, fullName, email, role, token, mustChangePassword) => {
+        setAuthToken(token);
         set({ user: { id: String(id), name: fullName, email, role }, token, mustChangePassword });
       },
+      setToken: (token) => {
+        setAuthToken(token);
+        set({ token });
+      },
       clearMustChangePassword: () => set({ mustChangePassword: false }),
-      logout: () => set({ user: null, token: null, mustChangePassword: false, notifications: [] }),
+      logout: () => {
+        setAuthToken(null);
+        set({ user: null, token: null, mustChangePassword: false, notifications: [] });
+      },
 
       pendingStudentCount: 0,
       setPendingStudentCount: (n) => set({ pendingStudentCount: n }),
@@ -150,7 +160,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: "cms-app-store",
-      partialize: (s) => ({ user: s.user, token: s.token, mustChangePassword: s.mustChangePassword, theme: s.theme }),
+      partialize: (s) => ({ user: s.user, mustChangePassword: s.mustChangePassword, theme: s.theme }),
     }
   )
 );

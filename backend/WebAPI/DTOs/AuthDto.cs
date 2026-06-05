@@ -50,9 +50,14 @@ namespace WebAPI.DTOs
 
         public string Role { get; set; } = string.Empty;
 
-        public string Token { get; set; } = string.Empty;
+        public string AccessToken { get; set; } = string.Empty;
 
         public bool MustChangePassword { get; set; }
+
+        // Populated by the service but excluded from the JSON response body.
+        // The controller reads this to set an HttpOnly cookie, then nulls it.
+        [System.Text.Json.Serialization.JsonIgnore]
+        public string? RefreshToken { get; set; }
     }
 
     public class ChangePasswordDto

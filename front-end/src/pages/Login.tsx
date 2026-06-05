@@ -46,7 +46,7 @@ const Login = () => {
         return;
       }
 
-      loginFromApi(res.id, res.fullName, res.email, res.role, res.token, res.mustChangePassword);
+      loginFromApi(res.id, res.fullName, res.email, res.role, res.accessToken, res.mustChangePassword);
       toast({ title: "Welcome back!", description: `Signed in as ${res.role}.` });
       navigate(res.mustChangePassword ? "/change-password" : "/dashboard");
     } catch (err: unknown) {
