@@ -217,6 +217,20 @@ namespace WebAPI.Services
             return true;
         }
 
+        public async Task<List<CourseResponseDto>> GetEnrolledCoursesAsync(int userId)
+        {
+            var student = await _context.Students.FirstOrDefaultAsync(s => s.UserId == userId);
+            if (student == null) return new List<CourseResponseDto>();
+
+            return await _context.Courses
+                .Include(c => c.Professor)
+                .Include(c => c.CourseStudents)
+                .Where(c => c.CourseStudents.Any(cs => cs.StudentId == student.Id))
+                .OrderBy(c => c.Title)
+                .Select(c => MapToDto(c))
+                .ToListAsync();
+        }
+
         private static CourseResponseDto MapToDto(Course c) => new()
         {
             Id = c.Id,

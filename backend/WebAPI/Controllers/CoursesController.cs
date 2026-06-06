@@ -30,6 +30,15 @@ namespace WebAPI.Controllers
             return Ok(courses);
         }
 
+        [HttpGet("enrolled")]
+        [Authorize(Roles = "student")]
+        public async Task<IActionResult> GetEnrolled()
+        {
+            var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var courses = await _courseService.GetEnrolledCoursesAsync(userId);
+            return Ok(courses);
+        }
+
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(int id)
         {

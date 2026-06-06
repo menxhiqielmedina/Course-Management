@@ -14,5 +14,6 @@ namespace WebAPI.Interfaces
         Task<(bool success, string error)> EnrollStudentAsync(int courseId, int studentId);
         Task<bool> RemoveStudentAsync(int courseId, int studentId);
         Task<bool> DeleteAsync(int id);
+        Task<List<CourseResponseDto>> GetEnrolledCoursesAsync(int userId);
     }
 }
