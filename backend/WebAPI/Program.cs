@@ -79,6 +79,22 @@ app.UseAuthorization();
 
 app.MapControllers();
 
+// Seed departments if none exist
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<WebAPI.Data.AppDbContext>();
+    if (!db.Departments.Any())
+    {
+        db.Departments.AddRange(
+            new WebAPI.Models.Department { Name = "Computer Science", Code = "CS",   IsActive = true, CreatedAt = DateTime.UtcNow },
+            new WebAPI.Models.Department { Name = "Mathematics",      Code = "MATH", IsActive = true, CreatedAt = DateTime.UtcNow },
+            new WebAPI.Models.Department { Name = "Physics",          Code = "PHYS", IsActive = true, CreatedAt = DateTime.UtcNow },
+            new WebAPI.Models.Department { Name = "Engineering",      Code = "ENG",  IsActive = true, CreatedAt = DateTime.UtcNow }
+        );
+        db.SaveChanges();
+    }
+}
+
 // TEMPORARY: Seed admin if none exists — remove after logging in
 using (var scope = app.Services.CreateScope())
 {
