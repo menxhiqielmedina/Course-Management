@@ -84,3 +84,8 @@ export async function removeStudentApi(courseId: number, studentId: number): Pro
 export async function deleteCourseApi(id: number): Promise<void> {
   await api.delete(`/courses/${id}`);
 }
+
+export async function getEnrolledCoursesApi(): Promise<CourseResponse[]> {
+  const { data } = await api.get<CourseResponse[]>("/courses/enrolled");
+  return data;
+}
