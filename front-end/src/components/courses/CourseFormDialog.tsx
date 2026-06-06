@@ -14,6 +14,7 @@ import { toast } from "@/hooks/use-toast";
 import { createCourseApi, updateCourseApi, type CourseResponse } from "@/lib/courseService";
 import api from "@/lib/api";
 import { Loader2 } from "lucide-react";
+import { useDepartments, useSemesters } from "@/hooks/use-config";
 
 interface Professor {
   id: number;
@@ -29,13 +30,10 @@ interface Props {
   onSaved: (course: CourseResponse) => void;
 }
 
-const DEPARTMENTS = ["Computer Science", "Mathematics", "Physics", "Engineering"];
-const SEMESTERS = ["Fall 2025", "Spring 2026", "Summer 2026", "Fall 2026"];
-
 const emptyForm = {
   code: "", title: "", description: "", credits: 3,
-  department: "Computer Science", professorId: null as number | null,
-  capacity: 50, semester: "Fall 2025", status: "draft",
+  department: "", professorId: null as number | null,
+  capacity: 50, semester: "", status: "draft",
 };
 
 export function CourseFormDialog({ open, onOpenChange, course, onSaved }: Props) {
@@ -43,6 +41,8 @@ export function CourseFormDialog({ open, onOpenChange, course, onSaved }: Props)
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [professors, setProfessors] = useState<Professor[]>([]);
   const [loading, setLoading] = useState(false);
+  const departments = useDepartments();
+  const semesters = useSemesters();
 
   useEffect(() => {
     if (!open) return;
@@ -69,6 +69,17 @@ export function CourseFormDialog({ open, onOpenChange, course, onSaved }: Props)
     }
     setErrors({});
   }, [course, open]);
+
+  // Set default department/semester once the lists load (only for new courses).
+  useEffect(() => {
+    if (!course && departments.length > 0)
+      setForm((f) => f.department ? f : { ...f, department: departments[0] });
+  }, [departments, course]);
+
+  useEffect(() => {
+    if (!course && semesters.length > 0)
+      setForm((f) => f.semester ? f : { ...f, semester: semesters[0] });
+  }, [semesters, course]);
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -145,7 +156,7 @@ export function CourseFormDialog({ open, onOpenChange, course, onSaved }: Props)
             >
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {DEPARTMENTS.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                {departments.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -181,7 +192,7 @@ export function CourseFormDialog({ open, onOpenChange, course, onSaved }: Props)
             <Select value={form.semester} onValueChange={(v) => setForm({ ...form, semester: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {SEMESTERS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                {semesters.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>

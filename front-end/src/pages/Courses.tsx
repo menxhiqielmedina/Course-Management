@@ -13,6 +13,7 @@ import {
 import { useAppStore } from "@/store/useAppStore";
 import { CourseFormDialog } from "@/components/courses/CourseFormDialog";
 import { toast } from "@/hooks/use-toast";
+import { useDepartments } from "@/hooks/use-config";
 import { getCoursesApi, updateCourseStatusApi, deleteCourseApi, type CourseResponse } from "@/lib/courseService";
 
 const COURSE_COLORS = [
@@ -25,6 +26,7 @@ const courseColor = (id: number) => COURSE_COLORS[id % COURSE_COLORS.length];
 const Courses = () => {
   const navigate = useNavigate();
   const { user } = useAppStore();
+  const departments = useDepartments();
   const [courses, setCourses] = useState<CourseResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -118,7 +120,7 @@ const Courses = () => {
               <SelectTrigger className="w-full md:w-48"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All departments</SelectItem>
-                {["Computer Science", "Mathematics", "Physics", "Engineering"].map((d) => (
+                {departments.map((d) => (
                   <SelectItem key={d} value={d}>{d}</SelectItem>
                 ))}
               </SelectContent>
