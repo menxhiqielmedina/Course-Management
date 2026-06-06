@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using WebAPI.Data;
 using WebAPI.DTOs;
 using WebAPI.Interfaces;
 
@@ -11,10 +13,79 @@ namespace WebAPI.Controllers
     public class AdminController : ControllerBase
     {
         private readonly IAdminService _adminService;
+        private readonly AppDbContext _context;
 
-        public AdminController(IAdminService adminService)
+        public AdminController(IAdminService adminService, AppDbContext context)
         {
             _adminService = adminService;
+            _context = context;
+        }
+
+        [HttpGet("dashboard")]
+        public async Task<IActionResult> GetDashboardStats()
+        {
+            var studentCount = await _context.Students
+                .Where(s => s.User.Status == "approved")
+                .CountAsync();
+
+            var activeCourseCount = await _context.Courses
+                .Where(c => c.Status == "active")
+                .CountAsync();
+
+            var professorCount = await _context.Professors.CountAsync();
+
+            var pendingStudentCount = await _context.Users
+                .Where(u => u.Role == "student" && u.Status == "pending")
+                .CountAsync();
+
+            var departmentDistribution = await _context.Students
+                .Where(s => s.User.Status == "approved" && s.Department != "")
+                .GroupBy(s => s.Department)
+                .Select(g => new { name = g.Key, value = g.Count() })
+                .OrderByDescending(g => g.value)
+                .ToListAsync();
+
+            var sixMonthsAgo = DateTime.UtcNow.AddMonths(-5).Date;
+            var rawTrend = await _context.Students
+                .Where(s => s.User.Status == "approved" && s.CreatedAt >= sixMonthsAgo)
+                .GroupBy(s => new { s.CreatedAt.Year, s.CreatedAt.Month })
+                .Select(g => new { g.Key.Year, g.Key.Month, Count = g.Count() })
+                .ToListAsync();
+
+            var months = Enumerable.Range(0, 6)
+                .Select(i => DateTime.UtcNow.AddMonths(-5 + i))
+                .Select(d => new
+                {
+                    month = d.ToString("MMM"),
+                    students = rawTrend
+                        .FirstOrDefault(t => t.Year == d.Year && t.Month == d.Month)?.Count ?? 0
+                })
+                .ToList();
+
+            var recentActivity = await _context.AuditLogs
+                .Include(a => a.User)
+                .OrderByDescending(a => a.CreatedAt)
+                .Take(5)
+                .Select(a => new
+                {
+                    id = a.Id,
+                    action = a.Action,
+                    target = a.Details ?? a.EntityType,
+                    user = a.User != null ? a.User.FullName : "System",
+                    createdAt = a.CreatedAt
+                })
+                .ToListAsync();
+
+            return Ok(new
+            {
+                studentCount,
+                activeCourseCount,
+                professorCount,
+                pendingStudentCount,
+                departmentDistribution,
+                enrollmentTrend = months,
+                recentActivity
+            });
         }
 
         [HttpGet("students/pending/count")]
