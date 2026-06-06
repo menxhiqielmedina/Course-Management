@@ -1,18 +1,42 @@
-import { BookOpen, GraduationCap, Users, TrendingUp } from "lucide-react";
+import { useEffect, useState } from "react";
+import { BookOpen, GraduationCap, Users, TrendingUp, Loader2 } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { StatCard } from "@/components/shared/StatCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { useAppStore } from "@/store/useAppStore";
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-  PieChart, Pie, Cell, BarChart, Bar, Legend,
+  PieChart, Pie, Cell, Legend,
 } from "recharts";
-import { enrollmentTrend, departmentDistribution, gradeDistribution } from "@/data/mockData";
+import { getDashboardStats, type DashboardStats } from "@/lib/dashboardService";
+
+const DEPT_COLORS = [
+  "hsl(230, 75%, 56%)",
+  "hsl(190, 70%, 45%)",
+  "hsl(280, 65%, 55%)",
+  "hsl(25, 90%, 55%)",
+  "hsl(340, 70%, 55%)",
+  "hsl(160, 60%, 45%)",
+];
 
 const AdminDashboard = () => {
-  const { courses, students, professors, auditLogs } = useAppStore();
-  const activeCourses = courses.filter((c) => c.status === "active").length;
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getDashboardStats()
+      .then(setStats)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -22,20 +46,20 @@ const AdminDashboard = () => {
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Total Students" value={students.length.toLocaleString()} icon={GraduationCap} trend="12% vs last month" trendUp variant="primary" />
-        <StatCard title="Active Courses" value={activeCourses} icon={BookOpen} trend="3 new this week" trendUp variant="info" />
-        <StatCard title="Professors" value={professors.length} icon={Users} trend="2 new hires" trendUp variant="success" />
-        <StatCard title="Avg. Engagement" value="87%" icon={TrendingUp} trend="4% vs last month" trendUp variant="warning" />
+        <StatCard title="Total Students" value={(stats?.studentCount ?? 0).toLocaleString()} icon={GraduationCap} trend={stats?.pendingStudentCount ? `${stats.pendingStudentCount} pending approval` : "All approved"} trendUp variant="primary" />
+        <StatCard title="Active Courses" value={stats?.activeCourseCount ?? 0} icon={BookOpen} trend="courses currently running" trendUp variant="info" />
+        <StatCard title="Professors" value={stats?.professorCount ?? 0} icon={Users} trend="faculty members" trendUp variant="success" />
+        <StatCard title="Departments" value={stats?.departmentDistribution.length ?? 0} icon={TrendingUp} trend="active departments" trendUp variant="warning" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Enrollment Trend</CardTitle>
+            <CardTitle>New Students (Last 6 Months)</CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={280}>
-              <AreaChart data={enrollmentTrend}>
+              <AreaChart data={stats?.enrollmentTrend ?? []}>
                 <defs>
                   <linearGradient id="colorStudents" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.4} />
@@ -44,7 +68,7 @@ const AdminDashboard = () => {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                <YAxis allowDecimals={false} stroke="hsl(var(--muted-foreground))" fontSize={12} />
                 <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }} />
                 <Area type="monotone" dataKey="students" stroke="hsl(var(--primary))" fill="url(#colorStudents)" strokeWidth={2} />
               </AreaChart>
@@ -57,54 +81,45 @@ const AdminDashboard = () => {
             <CardTitle>By Department</CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={280}>
-              <PieChart>
-                <Pie data={departmentDistribution} dataKey="value" nameKey="name" innerRadius={50} outerRadius={90} paddingAngle={3}>
-                  {departmentDistribution.map((d) => <Cell key={d.name} fill={d.color} />)}
-                </Pie>
-                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-              </PieChart>
-            </ResponsiveContainer>
+            {(stats?.departmentDistribution.length ?? 0) === 0 ? (
+              <div className="flex items-center justify-center h-[280px] text-sm text-muted-foreground">No data yet</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={280}>
+                <PieChart>
+                  <Pie data={stats?.departmentDistribution} dataKey="value" nameKey="name" innerRadius={50} outerRadius={90} paddingAngle={3}>
+                    {stats?.departmentDistribution.map((d, i) => (
+                      <Cell key={d.name} fill={DEPT_COLORS[i % DEPT_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }} />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Grade Distribution</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={gradeDistribution}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="grade" stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8 }} />
-                <Bar dataKey="count" fill="hsl(var(--primary))" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {auditLogs.slice(0, 5).map((log) => (
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent Activity</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {(stats?.recentActivity.length ?? 0) === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">No activity yet</p>
+          ) : (
+            stats?.recentActivity.map((log) => (
               <div key={log.id} className="flex items-start gap-3 text-sm">
-                <Badge variant="outline" className="text-[10px]">{log.action}</Badge>
+                <Badge variant="outline" className="text-[10px] shrink-0">{log.action}</Badge>
                 <div className="flex-1 min-w-0">
                   <p className="truncate">{log.target}</p>
-                  <p className="text-xs text-muted-foreground truncate">{log.user}</p>
+                  <p className="text-xs text-muted-foreground truncate">{log.user} · {new Date(log.createdAt).toLocaleString()}</p>
                 </div>
               </div>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 };
