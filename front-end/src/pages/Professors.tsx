@@ -12,6 +12,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { toast } from "@/hooks/use-toast";
 import { useAppStore } from "@/store/useAppStore";
 import { getProfessors, addProfessor, updateProfessor, deleteProfessor, type Professor } from "@/lib/adminService";
+import { useDepartments } from "@/hooks/use-config";
 
 const Professors = () => {
   const role = useAppStore((s) => s.user?.role);
@@ -26,9 +27,10 @@ const Professors = () => {
   const [addName, setAddName] = useState("");
   const [addEmail, setAddEmail] = useState("");
   const [addPassword, setAddPassword] = useState("");
-  const [addDepartment, setAddDepartment] = useState("Computer Science");
+  const [addDepartment, setAddDepartment] = useState("");
   const [addErrors, setAddErrors] = useState<{ name?: string; email?: string; password?: string; server?: string }>({});
   const [addLoading, setAddLoading] = useState(false);
+  const departments = useDepartments();
 
   // Edit state
   const [editTarget, setEditTarget] = useState<Professor | null>(null);
@@ -42,6 +44,10 @@ const Professors = () => {
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => { fetchProfessors(); }, []);
+
+  useEffect(() => {
+    if (departments.length > 0 && !addDepartment) setAddDepartment(departments[0]);
+  }, [departments]);
 
   const fetchProfessors = async () => {
     setLoading(true);
@@ -82,7 +88,7 @@ const Professors = () => {
       setProfessors((prev) => [...prev, newProf]);
       toast({ title: "Professor added", description: `${newProf.fullName} can now sign in.` });
       setAddOpen(false);
-      setAddName(""); setAddEmail(""); setAddPassword(""); setAddDepartment("Computer Science");
+      setAddName(""); setAddEmail(""); setAddPassword(""); setAddDepartment(departments[0] ?? "");
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Failed to add professor.";
       setAddErrors({ server: msg });
@@ -241,7 +247,7 @@ const Professors = () => {
               <Select value={addDepartment} onValueChange={setAddDepartment} disabled={addLoading}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {["Computer Science", "Mathematics", "Physics", "Engineering"].map((d) => (
+                  {departments.map((d) => (
                     <SelectItem key={d} value={d}>{d}</SelectItem>
                   ))}
                 </SelectContent>

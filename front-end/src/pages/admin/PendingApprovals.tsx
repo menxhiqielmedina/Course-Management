@@ -15,6 +15,7 @@ import {
   type PendingStudent,
 } from "@/lib/adminService";
 import { useAppStore } from "@/store/useAppStore";
+import { useDepartments } from "@/hooks/use-config";
 
 const PendingApprovals = () => {
   const [students, setStudents] = useState<PendingStudent[]>([]);
@@ -26,13 +27,18 @@ const PendingApprovals = () => {
   const [profName, setProfName] = useState("");
   const [profEmail, setProfEmail] = useState("");
   const [profPassword, setProfPassword] = useState("");
-  const [profDepartment, setProfDepartment] = useState("Computer Science");
+  const [profDepartment, setProfDepartment] = useState("");
+  const departments = useDepartments();
   const [profErrors, setProfErrors] = useState<{ name?: string; email?: string; password?: string; server?: string }>({});
   const [addingProf, setAddingProf] = useState(false);
 
   useEffect(() => {
     fetchPending();
   }, []);
+
+  useEffect(() => {
+    if (departments.length > 0 && !profDepartment) setProfDepartment(departments[0]);
+  }, [departments]);
 
   const fetchPending = async () => {
     setLoadingStudents(true);
@@ -102,7 +108,7 @@ const PendingApprovals = () => {
       setProfName("");
       setProfEmail("");
       setProfPassword("");
-      setProfDepartment("Computer Science");
+      setProfDepartment(departments[0] ?? "");
       setProfErrors({});
     } catch (err: unknown) {
       const msg =
@@ -250,7 +256,7 @@ const PendingApprovals = () => {
               <Select value={profDepartment} onValueChange={setProfDepartment} disabled={addingProf}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {["Computer Science", "Mathematics", "Physics", "Engineering"].map((d) => (
+                  {departments.map((d) => (
                     <SelectItem key={d} value={d}>{d}</SelectItem>
                   ))}
                 </SelectContent>

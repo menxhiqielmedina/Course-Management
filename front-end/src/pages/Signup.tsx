@@ -6,15 +6,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { registerApi } from "@/lib/authService";
-
-const DEPARTMENTS = ["Computer Science", "Mathematics", "Physics", "Engineering"];
+import { useDepartments } from "@/hooks/use-config";
 
 const Signup = () => {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [department, setDepartment] = useState("Computer Science");
+  const [department, setDepartment] = useState("");
+  const departments = useDepartments();
   const [errors, setErrors] = useState<{
     fullName?: string;
     email?: string;
@@ -147,7 +147,7 @@ const Signup = () => {
                   <Select value={department} onValueChange={setDepartment} disabled={loading}>
                     <SelectTrigger id="department"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {DEPARTMENTS.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                      {departments.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
