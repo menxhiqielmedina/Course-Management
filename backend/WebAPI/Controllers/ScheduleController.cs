@@ -25,9 +25,18 @@ namespace WebAPI.Controllers
         [Authorize(Roles = "admin")]
         public async Task<IActionResult> Create(CreateScheduleDto dto)
         {
-            var result = await _service.CreateAsync(dto);
-            if (result == null) return BadRequest(new { message = "Course not found." });
-            return Ok(result);
+            var (entry, error) = await _service.CreateAsync(dto);
+            if (entry == null) return BadRequest(new { message = error });
+            return Ok(entry);
+        }
+
+        [HttpPut("{id}")]
+        [Authorize(Roles = "admin")]
+        public async Task<IActionResult> Update(int id, UpdateScheduleDto dto)
+        {
+            var (entry, error) = await _service.UpdateAsync(id, dto);
+            if (entry == null) return BadRequest(new { message = error });
+            return Ok(entry);
         }
 
         [HttpDelete("{id}")]

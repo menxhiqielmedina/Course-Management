@@ -21,4 +21,13 @@ namespace WebAPI.DTOs
         public int EndHour { get; set; }
         public string? Room { get; set; }
     }
+
+    public class UpdateScheduleDto
+    {
+        public int CourseId { get; set; }
+        public string DayOfWeek { get; set; } = string.Empty;
+        public int StartHour { get; set; }
+        public int EndHour { get; set; }
+        public string? Room { get; set; }
+    }
 }

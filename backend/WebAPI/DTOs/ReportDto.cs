@@ -12,6 +12,9 @@ namespace WebAPI.DTOs
         public int PendingStudents { get; set; }
         public List<DepartmentStatDto> DepartmentStats { get; set; } = new();
         public List<MonthlyEnrollmentDto> EnrollmentTrend { get; set; } = new();
+        public List<DepartmentSummaryDto> DepartmentSummary { get; set; } = new();
+        public List<TopCourseDto> TopCourses { get; set; } = new();
+        public List<ProfessorWorkloadDto> ProfessorWorkload { get; set; } = new();
     }
 
     public class DepartmentStatDto
@@ -24,5 +27,29 @@ namespace WebAPI.DTOs
     {
         public string Month { get; set; } = string.Empty;
         public int Students { get; set; }
+    }
+
+    public class DepartmentSummaryDto
+    {
+        public string Department { get; set; } = string.Empty;
+        public int Courses { get; set; }
+        public int Students { get; set; }
+        public int Professors { get; set; }
+        public int Enrollments { get; set; }
+    }
+
+    public class TopCourseDto
+    {
+        public string CourseCode { get; set; } = string.Empty;
+        public string CourseName { get; set; } = string.Empty;
+        public string ProfessorName { get; set; } = string.Empty;
+        public int EnrolledStudents { get; set; }
+    }
+
+    public class ProfessorWorkloadDto
+    {
+        public string ProfessorName { get; set; } = string.Empty;
+        public string Department { get; set; } = string.Empty;
+        public int CoursesAssigned { get; set; }
     }
 }
