@@ -41,49 +41,71 @@ namespace WebAPI.Services
             return await query
                 .OrderBy(s => s.DayOfWeek)
                 .ThenBy(s => s.StartTime)
-                .Select(s => new ScheduleEntryDto
-                {
-                    Id = s.Id,
-                    CourseId = s.CourseId,
-                    CourseCode = s.Course.Code,
-                    CourseTitle = s.Course.Title,
-                    DayOfWeek = s.DayOfWeek,
-                    DayNumber = DayMap.ContainsKey(s.DayOfWeek) ? DayMap[s.DayOfWeek] : 0,
-                    StartHour = s.StartTime.Hours,
-                    EndHour = s.EndTime.Hours,
-                    Room = s.Room
-                })
+                .Select(s => ToDto(s))
                 .ToListAsync();
         }
 
-        public async Task<ScheduleEntryDto?> CreateAsync(CreateScheduleDto dto)
+        public async Task<(ScheduleEntryDto? entry, string? error)> CreateAsync(CreateScheduleDto dto)
         {
-            var course = await _context.Courses.FindAsync(dto.CourseId);
-            if (course == null) return null;
+            var course = await _context.Courses
+                .Include(c => c.Professor)
+                .FirstOrDefaultAsync(c => c.Id == dto.CourseId);
+            if (course == null) return (null, "Course not found.");
+
+            var start = TimeSpan.FromHours(dto.StartHour);
+            var end = TimeSpan.FromHours(dto.EndHour);
+
+            if (dto.StartHour >= dto.EndHour)
+                return (null, "Start hour must be before end hour.");
+
+            var conflictError = await CheckConflictsAsync(dto.DayOfWeek, start, end, course.ProfessorId, dto.Room, excludeId: null);
+            if (conflictError != null) return (null, conflictError);
 
             var entry = new CourseSchedule
             {
                 CourseId = dto.CourseId,
                 DayOfWeek = dto.DayOfWeek,
-                StartTime = TimeSpan.FromHours(dto.StartHour),
-                EndTime = TimeSpan.FromHours(dto.EndHour),
-                Room = dto.Room
+                StartTime = start,
+                EndTime = end,
+                Room = string.IsNullOrWhiteSpace(dto.Room) ? null : dto.Room.Trim()
             };
             _context.CourseSchedules.Add(entry);
             await _context.SaveChangesAsync();
 
-            return new ScheduleEntryDto
-            {
-                Id = entry.Id,
-                CourseId = entry.CourseId,
-                CourseCode = course.Code,
-                CourseTitle = course.Title,
-                DayOfWeek = entry.DayOfWeek,
-                DayNumber = DayMap.ContainsKey(entry.DayOfWeek) ? DayMap[entry.DayOfWeek] : 0,
-                StartHour = entry.StartTime.Hours,
-                EndHour = entry.EndTime.Hours,
-                Room = entry.Room
-            };
+            await _context.Entry(entry).Reference(e => e.Course).LoadAsync();
+            return (ToDto(entry), null);
+        }
+
+        public async Task<(ScheduleEntryDto? entry, string? error)> UpdateAsync(int id, UpdateScheduleDto dto)
+        {
+            var entry = await _context.CourseSchedules
+                .Include(s => s.Course).ThenInclude(c => c.Professor)
+                .FirstOrDefaultAsync(s => s.Id == id);
+            if (entry == null) return (null, "Schedule entry not found.");
+
+            var course = await _context.Courses
+                .Include(c => c.Professor)
+                .FirstOrDefaultAsync(c => c.Id == dto.CourseId);
+            if (course == null) return (null, "Course not found.");
+
+            var start = TimeSpan.FromHours(dto.StartHour);
+            var end = TimeSpan.FromHours(dto.EndHour);
+
+            if (dto.StartHour >= dto.EndHour)
+                return (null, "Start hour must be before end hour.");
+
+            var conflictError = await CheckConflictsAsync(dto.DayOfWeek, start, end, course.ProfessorId, dto.Room, excludeId: id);
+            if (conflictError != null) return (null, conflictError);
+
+            entry.CourseId = dto.CourseId;
+            entry.DayOfWeek = dto.DayOfWeek;
+            entry.StartTime = start;
+            entry.EndTime = end;
+            entry.Room = string.IsNullOrWhiteSpace(dto.Room) ? null : dto.Room.Trim();
+            entry.Course = course;
+
+            await _context.SaveChangesAsync();
+            return (ToDto(entry), null);
         }
 
         public async Task<bool> DeleteAsync(int id)
@@ -94,5 +116,50 @@ namespace WebAPI.Services
             await _context.SaveChangesAsync();
             return true;
         }
+
+        // Returns an error message if there is a conflict, or null if clear.
+        private async Task<string?> CheckConflictsAsync(
+            string day, TimeSpan start, TimeSpan end,
+            int? professorId, string? room, int? excludeId)
+        {
+            var siblings = _context.CourseSchedules
+                .Include(s => s.Course)
+                .Where(s => s.DayOfWeek == day && (excludeId == null || s.Id != excludeId));
+
+            // Room conflict — only when a room is specified
+            if (!string.IsNullOrWhiteSpace(room))
+            {
+                var roomConflict = await siblings.AnyAsync(s =>
+                    s.Room == room.Trim() &&
+                    s.StartTime < end && s.EndTime > start);
+                if (roomConflict)
+                    return $"Room '{room}' is already booked on {day} during that time slot.";
+            }
+
+            // Professor conflict
+            if (professorId.HasValue)
+            {
+                var profConflict = await siblings.AnyAsync(s =>
+                    s.Course.ProfessorId == professorId &&
+                    s.StartTime < end && s.EndTime > start);
+                if (profConflict)
+                    return "The professor already has a class on that day and time.";
+            }
+
+            return null;
+        }
+
+        private static ScheduleEntryDto ToDto(CourseSchedule s) => new()
+        {
+            Id = s.Id,
+            CourseId = s.CourseId,
+            CourseCode = s.Course.Code,
+            CourseTitle = s.Course.Title,
+            DayOfWeek = s.DayOfWeek,
+            DayNumber = DayMap.TryGetValue(s.DayOfWeek, out var d) ? d : 0,
+            StartHour = s.StartTime.Hours,
+            EndHour = s.EndTime.Hours,
+            Room = s.Room
+        };
     }
 }
