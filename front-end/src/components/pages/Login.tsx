@@ -1,8 +1,170 @@
-import { Link } from "react-router-dom";
+import { useState } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import { GraduationCap, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useAppStore } from "@/store/useAppStore";
+import { toast } from "@/hooks/use-toast";
+import { loginApi } from "@/lib/authService";
 
-<p className="mt-6 text-center text-sm text-muted-foreground">
-  Don&apos;t have an account?{" "}
-  <Link to="/signup" className="font-medium text-primary hover:underline">
-    Sign up
-  </Link>
-</p>
+const Login = () => {
+  const navigate = useNavigate();
+  const loginFromApi = useAppStore((s) => s.loginFromApi);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [errors, setErrors] = useState<{ email?: string; password?: string; server?: string }>({});
+  const [loading, setLoading] = useState(false);
+
+  const validate = () => {
+    const errs: typeof errors = {};
+    if (!email.includes("@")) errs.email = "Enter a valid email";
+    if (password.length < 6) errs.password = "At least 6 characters";
+    return errs;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const errs = validate();
+    setErrors(errs);
+    if (Object.keys(errs).length) return;
+
+    setLoading(true);
+    try {
+      const res = await loginApi({ email: email.trim(), password });
+      loginFromApi(res.id, res.fullName, res.email, res.role, res.accessToken, res.mustChangePassword);
+      toast({ title: "Welcome back!", description: `Signed in as ${res.role}.` });
+      navigate(res.mustChangePassword ? "/change-password" : "/dashboard");
+    } catch (err: unknown) {
+      const e = err as { response?: { status?: number; data?: { message?: string } } };
+      const msg = e?.response?.data?.message ?? "Invalid email or password.";
+      setErrors({ server: msg });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen grid lg:grid-cols-2">
+      {/* Hero side */}
+      <div className="hidden lg:flex relative gradient-hero text-primary-foreground p-12 flex-col justify-between overflow-hidden">
+        <div
+          className="absolute inset-0 opacity-20"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at 20% 30%, white 0%, transparent 40%), radial-gradient(circle at 80% 70%, white 0%, transparent 40%)",
+          }}
+        />
+        <div className="relative flex items-center gap-2">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 backdrop-blur">
+            <GraduationCap className="h-6 w-6" />
+          </div>
+          <span className="font-bold text-lg">EduTrack</span>
+        </div>
+        <div className="relative space-y-6">
+          <h1 className="text-5xl font-bold leading-tight">
+            The modern platform for academic excellence.
+          </h1>
+          <p className="text-lg opacity-90 max-w-md">
+            Manage courses, students, professors and schedules — all in one elegant,
+            presentation-ready dashboard.
+          </p>
+          <div className="grid grid-cols-3 gap-4 pt-6 max-w-md">
+            {[
+              { v: "12K+", l: "Students" },
+              { v: "450+", l: "Courses" },
+              { v: "98%", l: "Satisfaction" },
+            ].map((s) => (
+              <div key={s.l}>
+                <div className="text-3xl font-bold">{s.v}</div>
+                <div className="text-xs opacity-80 uppercase tracking-wider">{s.l}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="relative text-xs opacity-70">© 2025 EduTrack Platform</div>
+      </div>
+
+      {/* Form side */}
+      <div className="flex items-center justify-center p-6 md:p-12 bg-background">
+        <div className="w-full max-w-md space-y-8">
+          <div className="lg:hidden flex items-center gap-2">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg gradient-primary">
+              <GraduationCap className="h-5 w-5 text-primary-foreground" />
+            </div>
+            <span className="font-bold">EduTrack</span>
+          </div>
+
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight">Sign in to your account</h2>
+            <p className="text-sm text-muted-foreground mt-2">
+              Enter your credentials to continue.
+            </p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@university.edu"
+                disabled={loading}
+              />
+              {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Password</Label>
+                <button
+                  type="button"
+                  onClick={() => navigate("/forgot-password")}
+                  className="text-xs text-primary hover:underline"
+                >
+                  Forgot password?
+                </button>
+              </div>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                disabled={loading}
+              />
+              {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
+            </div>
+
+            {errors.server && (
+              <p className="text-xs text-destructive bg-destructive/10 rounded-md px-3 py-2">
+                {errors.server}
+              </p>
+            )}
+
+            <Button
+              type="submit"
+              className="w-full gradient-primary text-primary-foreground hover:opacity-90 transition shadow-glow"
+              size="lg"
+              disabled={loading}
+            >
+              {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              {loading ? "Signing in…" : "Sign in"}
+            </Button>
+          </form>
+
+          <p className="text-center text-sm text-muted-foreground">
+            Don't have an account?{" "}
+            <Link to="/signup" className="font-medium text-primary hover:underline">
+              Create one
+            </Link>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Login;

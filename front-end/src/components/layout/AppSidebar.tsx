@@ -2,7 +2,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, BookOpen, Users, GraduationCap, Calendar,
   FileText, Bell, BarChart3, FolderOpen, FileCode, ScrollText,
-  Settings, GraduationCap as Logo, UserCog,
+  Settings, GraduationCap as Logo, UserCog, ClipboardList,
 } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
@@ -18,6 +18,7 @@ const adminMain = [
   { title: "Professors", url: "/professors", icon: Users },
   { title: "Schedule", url: "/schedule", icon: Calendar },
   { title: "Assignments", url: "/assignments", icon: FileText },
+  { title: "Grades", url: "/grades", icon: ClipboardList },
 ];
 
 const adminSecondary = [
@@ -34,6 +35,7 @@ const studentMain = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "My Courses", url: "/courses", icon: BookOpen },
   { title: "Schedule", url: "/schedule", icon: Calendar },
+  { title: "Grades", url: "/grades", icon: ClipboardList },
   { title: "Files", url: "/files", icon: FolderOpen },
   { title: "Notifications", url: "/notifications", icon: Bell },
   { title: "Settings", url: "/settings", icon: Settings },
@@ -45,6 +47,7 @@ const professorMain = [
   { title: "Students", url: "/students", icon: GraduationCap },
   { title: "Schedule", url: "/schedule", icon: Calendar },
   { title: "Assignments", url: "/assignments", icon: FileText },
+  { title: "Grades", url: "/grades", icon: ClipboardList },
   { title: "Files", url: "/files", icon: FolderOpen },
   { title: "Reports", url: "/reports", icon: BarChart3 },
   { title: "Notifications", url: "/notifications", icon: Bell },
