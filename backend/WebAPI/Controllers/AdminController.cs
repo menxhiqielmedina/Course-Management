@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 using WebAPI.Data;
 using WebAPI.DTOs;
 using WebAPI.Interfaces;
@@ -20,6 +21,9 @@ namespace WebAPI.Controllers
             _adminService = adminService;
             _context = context;
         }
+
+        private int GetUserId() => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        private string GetRole() => User.FindFirstValue(ClaimTypes.Role)!;
 
         [HttpGet("dashboard")]
         public async Task<IActionResult> GetDashboardStats()
@@ -128,6 +132,7 @@ namespace WebAPI.Controllers
         }
 
         [HttpGet("professors")]
+        [Authorize(Roles = "admin,professor")]
         public async Task<IActionResult> GetProfessors()
         {
             var professors = await _adminService.GetProfessorsAsync();
@@ -144,10 +149,15 @@ namespace WebAPI.Controllers
         }
 
         [HttpGet("students")]
+        [Authorize(Roles = "admin,professor")]
         public async Task<IActionResult> GetAllStudents()
         {
-            var students = await _adminService.GetAllStudentsAsync();
-            return Ok(students);
+            if (GetRole() == "professor")
+            {
+                var students = await _adminService.GetStudentsForProfessorAsync(GetUserId());
+                return Ok(students);
+            }
+            return Ok(await _adminService.GetAllStudentsAsync());
         }
 
         [HttpPut("students/{id}")]

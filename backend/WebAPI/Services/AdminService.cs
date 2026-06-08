@@ -159,6 +159,33 @@ namespace WebAPI.Services
                 .ToListAsync();
         }
 
+        public async Task<List<StudentDto>> GetStudentsForProfessorAsync(int professorUserId)
+        {
+            var professor = await _context.Professors.FirstOrDefaultAsync(p => p.UserId == professorUserId);
+            if (professor == null) return new List<StudentDto>();
+
+            var studentIds = await _context.CourseStudents
+                .Where(cs => cs.Course.ProfessorId == professor.Id)
+                .Select(cs => cs.StudentId)
+                .Distinct()
+                .ToListAsync();
+
+            return await _context.Students
+                .Include(s => s.User)
+                .Where(s => studentIds.Contains(s.Id))
+                .OrderBy(s => s.FullName)
+                .Select(s => new StudentDto
+                {
+                    Id = s.Id,
+                    FullName = s.FullName,
+                    Email = s.Email,
+                    Department = s.Department ?? string.Empty,
+                    Status = s.User.Status,
+                    CreatedAt = s.CreatedAt
+                })
+                .ToListAsync();
+        }
+
         public async Task<bool> UpdateStudentAsync(int id, UpdateUserDto dto)
         {
             var email = dto.Email.Trim().ToLower();
@@ -189,6 +216,8 @@ namespace WebAPI.Services
 
             professor.FullName = dto.FullName.Trim();
             professor.Email = email;
+            if (dto.Department != null)
+                professor.Department = dto.Department.Trim();
             professor.User.FullName = dto.FullName.Trim();
             professor.User.Email = email;
             await _context.SaveChangesAsync();

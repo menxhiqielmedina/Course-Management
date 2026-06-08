@@ -52,6 +52,7 @@ builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 builder.Services.AddScoped<IScheduleService, ScheduleService>();
 builder.Services.AddScoped<IProfileService, ProfileService>();
 builder.Services.AddScoped<IReportService, ReportService>();
+builder.Services.AddScoped<IGradeService, GradeService>();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();

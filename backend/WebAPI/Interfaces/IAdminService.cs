@@ -12,6 +12,7 @@ namespace WebAPI.Interfaces
         Task<List<ProfessorDto>> GetProfessorsAsync();
         Task<StudentDto?> AddStudentAsync(AddStudentDto dto);
         Task<List<StudentDto>> GetAllStudentsAsync();
+        Task<List<StudentDto>> GetStudentsForProfessorAsync(int professorUserId);
         Task<bool> UpdateStudentAsync(int id, UpdateUserDto dto);
         Task<bool> UpdateProfessorAsync(int id, UpdateUserDto dto);
         Task<bool> DeleteStudentAsync(int id);
