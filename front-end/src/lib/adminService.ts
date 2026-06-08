@@ -59,7 +59,7 @@ export const addStudent = (payload: { fullName: string; email: string; password:
 export const updateStudent = (id: number, payload: { fullName: string; email: string; department?: string }): Promise<void> =>
   api.put(`/admin/students/${id}`, payload);
 
-export const updateProfessor = (id: number, payload: { fullName: string; email: string }): Promise<void> =>
+export const updateProfessor = (id: number, payload: { fullName: string; email: string; department?: string }): Promise<void> =>
   api.put(`/admin/professors/${id}`, payload);
 
 export const deleteStudent = (id: number): Promise<void> =>

@@ -36,6 +36,7 @@ const Professors = () => {
   const [editTarget, setEditTarget] = useState<Professor | null>(null);
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
+  const [editDepartment, setEditDepartment] = useState("");
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState("");
 
@@ -102,6 +103,7 @@ const Professors = () => {
     setEditTarget(p);
     setEditName(p.fullName);
     setEditEmail(p.email);
+    setEditDepartment(p.department ?? "");
     setEditError("");
   };
 
@@ -112,9 +114,9 @@ const Professors = () => {
 
     setEditLoading(true);
     try {
-      await updateProfessor(editTarget.id, { fullName: editName.trim(), email: editEmail.trim() });
+      await updateProfessor(editTarget.id, { fullName: editName.trim(), email: editEmail.trim(), department: editDepartment || undefined });
       setProfessors((prev) =>
-        prev.map((p) => p.id === editTarget.id ? { ...p, fullName: editName.trim(), email: editEmail.trim() } : p)
+        prev.map((p) => p.id === editTarget.id ? { ...p, fullName: editName.trim(), email: editEmail.trim(), department: editDepartment } : p)
       );
       toast({ title: "Updated", description: "Professor details saved." });
       setEditTarget(null);
@@ -279,6 +281,17 @@ const Professors = () => {
             <div className="space-y-2">
               <Label>Email</Label>
               <Input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} disabled={editLoading} />
+            </div>
+            <div className="space-y-2">
+              <Label>Department</Label>
+              <Select value={editDepartment} onValueChange={setEditDepartment} disabled={editLoading}>
+                <SelectTrigger><SelectValue placeholder="Select department" /></SelectTrigger>
+                <SelectContent>
+                  {departments.map((d) => (
+                    <SelectItem key={d} value={d}>{d}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             {editError && <p className="text-xs text-destructive">{editError}</p>}
           </div>
