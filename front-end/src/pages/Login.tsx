@@ -1,24 +1,16 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { GraduationCap, ShieldCheck, BookOpen, User, Loader2 } from "lucide-react";
+import { GraduationCap, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAppStore } from "@/store/useAppStore";
 import { toast } from "@/hooks/use-toast";
 import { loginApi } from "@/lib/authService";
-import type { Role } from "@/data/mockData";
-
-const roles: { id: Role; label: string; icon: typeof ShieldCheck }[] = [
-  { id: "admin", label: "Admin", icon: ShieldCheck },
-  { id: "professor", label: "Professor", icon: BookOpen },
-  { id: "student", label: "Student", icon: User },
-];
 
 const Login = () => {
   const navigate = useNavigate();
   const loginFromApi = useAppStore((s) => s.loginFromApi);
-  const [role, setRole] = useState<Role>("student");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState<{ email?: string; password?: string; server?: string }>({});
@@ -40,12 +32,6 @@ const Login = () => {
     setLoading(true);
     try {
       const res = await loginApi({ email: email.trim(), password });
-
-      if (res.role !== role) {
-        setErrors({ server: `This account is registered as a ${res.role}, not a ${role}. Please select the correct role.` });
-        return;
-      }
-
       loginFromApi(res.id, res.fullName, res.email, res.role, res.accessToken, res.mustChangePassword);
       toast({ title: "Welcome back!", description: `Signed in as ${res.role}.` });
       navigate(res.mustChangePassword ? "/change-password" : "/dashboard");
@@ -112,29 +98,8 @@ const Login = () => {
           <div>
             <h2 className="text-3xl font-bold tracking-tight">Sign in to your account</h2>
             <p className="text-sm text-muted-foreground mt-2">
-              Select your role, then enter your credentials.
+              Enter your credentials to continue.
             </p>
-          </div>
-
-          {/* Role selector */}
-          <div className="grid grid-cols-3 gap-2">
-            {roles.map((r) => (
-              <button
-                key={r.id}
-                type="button"
-                onClick={() => setRole(r.id)}
-                className={`flex flex-col items-center gap-2 rounded-xl border-2 p-3 transition ${
-                  role === r.id
-                    ? "border-primary bg-primary/5 shadow-sm"
-                    : "border-border hover:border-primary/40"
-                }`}
-              >
-                <r.icon
-                  className={`h-5 w-5 ${role === r.id ? "text-primary" : "text-muted-foreground"}`}
-                />
-                <span className="text-xs font-medium">{r.label}</span>
-              </button>
-            ))}
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">

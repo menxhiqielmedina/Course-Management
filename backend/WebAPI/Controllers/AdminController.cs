@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using WebAPI.Data;
 using WebAPI.DTOs;
@@ -10,7 +11,7 @@ namespace WebAPI.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Roles = "admin")]
+    [Authorize]
     public class AdminController : ControllerBase
     {
         private readonly IAdminService _adminService;
@@ -22,10 +23,16 @@ namespace WebAPI.Controllers
             _context = context;
         }
 
-        private int GetUserId() => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        private int GetUserId()
+        {
+            var claim = User.FindFirstValue(ClaimTypes.NameIdentifier)
+                     ?? User.FindFirstValue(JwtRegisteredClaimNames.Sub);
+            return int.Parse(claim!);
+        }
         private string GetRole() => User.FindFirstValue(ClaimTypes.Role)!;
 
         [HttpGet("dashboard")]
+        [Authorize(Roles = "admin")]
         public async Task<IActionResult> GetDashboardStats()
         {
             var studentCount = await _context.Students
@@ -93,6 +100,7 @@ namespace WebAPI.Controllers
         }
 
         [HttpGet("students/pending/count")]
+        [Authorize(Roles = "admin")]
         public async Task<IActionResult> GetPendingCount()
         {
             var count = await _adminService.GetPendingStudentCountAsync();
@@ -100,6 +108,7 @@ namespace WebAPI.Controllers
         }
 
         [HttpGet("students/pending")]
+        [Authorize(Roles = "admin")]
         public async Task<IActionResult> GetPendingStudents()
         {
             var students = await _adminService.GetPendingStudentsAsync();
@@ -107,6 +116,7 @@ namespace WebAPI.Controllers
         }
 
         [HttpPut("students/{id}/approve")]
+        [Authorize(Roles = "admin")]
         public async Task<IActionResult> ApproveStudent(int id)
         {
             var success = await _adminService.ApproveStudentAsync(id);
@@ -115,6 +125,7 @@ namespace WebAPI.Controllers
         }
 
         [HttpPut("students/{id}/reject")]
+        [Authorize(Roles = "admin")]
         public async Task<IActionResult> RejectStudent(int id)
         {
             var success = await _adminService.RejectStudentAsync(id);
@@ -123,6 +134,7 @@ namespace WebAPI.Controllers
         }
 
         [HttpPost("professors")]
+        [Authorize(Roles = "admin")]
         public async Task<IActionResult> AddProfessor(AddProfessorDto dto)
         {
             var professor = await _adminService.AddProfessorAsync(dto);
@@ -140,6 +152,7 @@ namespace WebAPI.Controllers
         }
 
         [HttpPost("students")]
+        [Authorize(Roles = "admin")]
         public async Task<IActionResult> AddStudent(AddStudentDto dto)
         {
             var student = await _adminService.AddStudentAsync(dto);
@@ -152,15 +165,11 @@ namespace WebAPI.Controllers
         [Authorize(Roles = "admin,professor")]
         public async Task<IActionResult> GetAllStudents()
         {
-            if (GetRole() == "professor")
-            {
-                var students = await _adminService.GetStudentsForProfessorAsync(GetUserId());
-                return Ok(students);
-            }
             return Ok(await _adminService.GetAllStudentsAsync());
         }
 
         [HttpPut("students/{id}")]
+        [Authorize(Roles = "admin")]
         public async Task<IActionResult> UpdateStudent(int id, UpdateUserDto dto)
         {
             var success = await _adminService.UpdateStudentAsync(id, dto);
@@ -169,6 +178,7 @@ namespace WebAPI.Controllers
         }
 
         [HttpPut("professors/{id}")]
+        [Authorize(Roles = "admin")]
         public async Task<IActionResult> UpdateProfessor(int id, UpdateUserDto dto)
         {
             var success = await _adminService.UpdateProfessorAsync(id, dto);
@@ -177,6 +187,7 @@ namespace WebAPI.Controllers
         }
 
         [HttpDelete("students/{id}")]
+        [Authorize(Roles = "admin")]
         public async Task<IActionResult> DeleteStudent(int id)
         {
             var success = await _adminService.DeleteStudentAsync(id);
@@ -185,6 +196,7 @@ namespace WebAPI.Controllers
         }
 
         [HttpDelete("professors/{id}")]
+        [Authorize(Roles = "admin")]
         public async Task<IActionResult> DeleteProfessor(int id)
         {
             var success = await _adminService.DeleteProfessorAsync(id);

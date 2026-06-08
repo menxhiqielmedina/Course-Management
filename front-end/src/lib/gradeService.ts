@@ -36,7 +36,7 @@ export interface UpsertGradeDto {
 }
 
 export const getCourseGradesApi = (courseId: number): Promise<CourseStudentGrade[]> =>
-  api.get(/grades/course/${courseId}).then((r) => r.data);
+  api.get(`/grades/course/${courseId}`).then((r) => r.data);
 
 export const getMyGradesApi = (): Promise<GradeResponse[]> =>
   api.get("/grades/my").then((r) => r.data);
@@ -45,4 +45,4 @@ export const upsertGradeApi = (dto: UpsertGradeDto): Promise<GradeResponse> =>
   api.post("/grades", dto).then((r) => r.data);
 
 export const deleteGradeApi = (id: number): Promise<void> =>
-  api.delete(/grades/${id}).then((r) => r.data);
+  api.delete(`/grades/${id}`).then((r) => r.data);

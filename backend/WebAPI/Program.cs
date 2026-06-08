@@ -42,6 +42,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
+builder.Services.AddSingleton<WebAPI.Data.MongoDbContext>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IAdminService, AdminService>();
 builder.Services.AddScoped<ICourseService, CourseService>();
