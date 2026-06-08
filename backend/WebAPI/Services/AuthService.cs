@@ -3,24 +3,31 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using WebAPI.Data;
 using WebAPI.DTOs;
 using WebAPI.Interfaces;
+using WebAPI.Interfaces.Repositories;
 using WebAPI.Models;
 
 namespace WebAPI.Services
 {
     public class AuthService : IAuthService
     {
-        private readonly AppDbContext _context;
+        private readonly IUserRepository _userRepo;
+        private readonly IStudentRepository _studentRepo;
+        private readonly IProfessorRepository _professorRepo;
         private readonly PasswordHasher<User> _passwordHasher;
         private readonly IConfiguration _config;
 
-        public AuthService(AppDbContext context, IConfiguration config)
+        public AuthService(
+            IUserRepository userRepo,
+            IStudentRepository studentRepo,
+            IProfessorRepository professorRepo,
+            IConfiguration config)
         {
-            _context = context;
+            _userRepo = userRepo;
+            _studentRepo = studentRepo;
+            _professorRepo = professorRepo;
             _config = config;
             _passwordHasher = new PasswordHasher<User>();
         }
@@ -29,8 +36,7 @@ namespace WebAPI.Services
         {
             var email = dto.Email.Trim().ToLower();
 
-            var emailExists = await _context.Users.AnyAsync(u => u.Email == email);
-            if (emailExists) return null;
+            if (await _userRepo.ExistsByEmailAsync(email)) return null;
 
             var role = NormalizeRole(dto.Role);
 
@@ -45,12 +51,12 @@ namespace WebAPI.Services
 
             user.PasswordHash = _passwordHasher.HashPassword(user, dto.Password);
 
-            _context.Users.Add(user);
-            await _context.SaveChangesAsync();
+            await _userRepo.AddAsync(user);
+            await _userRepo.SaveChangesAsync();
 
             if (role == "student")
             {
-                _context.Students.Add(new Student
+                await _studentRepo.AddAsync(new Student
                 {
                     UserId = user.Id,
                     FullName = user.FullName,
@@ -58,11 +64,11 @@ namespace WebAPI.Services
                     Department = dto.Department.Trim(),
                     CreatedAt = user.CreatedAt
                 });
-                await _context.SaveChangesAsync();
+                await _studentRepo.SaveChangesAsync();
             }
             else if (role == "professor")
             {
-                _context.Professors.Add(new Professor
+                await _professorRepo.AddAsync(new Professor
                 {
                     UserId = user.Id,
                     FullName = user.FullName,
@@ -70,7 +76,7 @@ namespace WebAPI.Services
                     Department = string.Empty,
                     CreatedAt = user.CreatedAt
                 });
-                await _context.SaveChangesAsync();
+                await _professorRepo.SaveChangesAsync();
             }
 
             return await IssueTokensAsync(user);
@@ -80,7 +86,7 @@ namespace WebAPI.Services
         {
             var email = dto.Email.Trim().ToLower();
 
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
+            var user = await _userRepo.FindByEmailAsync(email);
             if (user == null)
                 return new LoginResult { ErrorMessage = "Invalid email or password." };
 
@@ -100,7 +106,7 @@ namespace WebAPI.Services
         public async Task<AuthResponseDto?> RefreshAsync(string refreshToken)
         {
             var hashed = HashToken(refreshToken);
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.RefreshToken == hashed);
+            var user = await _userRepo.FindByRefreshTokenAsync(hashed);
 
             if (user == null || user.RefreshTokenExpiry == null || user.RefreshTokenExpiry < DateTime.UtcNow)
                 return null;
@@ -113,17 +119,17 @@ namespace WebAPI.Services
             if (string.IsNullOrEmpty(refreshToken)) return;
 
             var hashed = HashToken(refreshToken);
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.RefreshToken == hashed);
+            var user = await _userRepo.FindByRefreshTokenAsync(hashed);
             if (user == null) return;
 
             user.RefreshToken = null;
             user.RefreshTokenExpiry = null;
-            await _context.SaveChangesAsync();
+            await _userRepo.SaveChangesAsync();
         }
 
         public async Task<bool> ChangePasswordAsync(int userId, ChangePasswordDto dto)
         {
-            var user = await _context.Users.FindAsync(userId);
+            var user = await _userRepo.GetByIdAsync(userId);
             if (user == null) return false;
 
             var result = _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, dto.CurrentPassword);
@@ -131,11 +137,10 @@ namespace WebAPI.Services
 
             user.PasswordHash = _passwordHasher.HashPassword(user, dto.NewPassword);
             user.MustChangePassword = false;
-            await _context.SaveChangesAsync();
+            await _userRepo.SaveChangesAsync();
             return true;
         }
 
-        // Generates both tokens, persists the refresh token hash, and returns the DTO.
         private async Task<AuthResponseDto> IssueTokensAsync(User user)
         {
             var accessToken = GenerateAccessToken(user);
@@ -144,7 +149,7 @@ namespace WebAPI.Services
             var days = int.Parse(_config["JwtSettings:RefreshTokenDays"] ?? "7");
             user.RefreshToken = hashedRefresh;
             user.RefreshTokenExpiry = DateTime.UtcNow.AddDays(days);
-            await _context.SaveChangesAsync();
+            await _userRepo.SaveChangesAsync();
 
             return new AuthResponseDto
             {
@@ -154,7 +159,7 @@ namespace WebAPI.Services
                 Role = user.Role,
                 MustChangePassword = user.MustChangePassword,
                 AccessToken = accessToken,
-                RefreshToken = plainRefresh,  // controller reads this, then nulls it before sending JSON
+                RefreshToken = plainRefresh,
             };
         }
 

@@ -1,15 +1,16 @@
-using Microsoft.EntityFrameworkCore;
-using WebAPI.Data;
 using WebAPI.DTOs;
 using WebAPI.Interfaces;
+using WebAPI.Interfaces.Repositories;
 using WebAPI.Models;
 
 namespace WebAPI.Services
 {
     public class ScheduleService : IScheduleService
     {
-        private readonly AppDbContext _context;
-        public ScheduleService(AppDbContext context) => _context = context;
+        private readonly IScheduleRepository _scheduleRepo;
+        private readonly IStudentRepository _studentRepo;
+        private readonly IProfessorRepository _professorRepo;
+        private readonly ICourseRepository _courseRepo;
 
         private static readonly Dictionary<string, int> DayMap = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -17,39 +18,46 @@ namespace WebAPI.Services
             ["Thursday"] = 4, ["Friday"] = 5, ["Saturday"] = 6, ["Sunday"] = 7
         };
 
+        public ScheduleService(
+            IScheduleRepository scheduleRepo,
+            IStudentRepository studentRepo,
+            IProfessorRepository professorRepo,
+            ICourseRepository courseRepo)
+        {
+            _scheduleRepo = scheduleRepo;
+            _studentRepo = studentRepo;
+            _professorRepo = professorRepo;
+            _courseRepo = courseRepo;
+        }
+
         public async Task<List<ScheduleEntryDto>> GetForUserAsync(int userId, string role)
         {
-            IQueryable<CourseSchedule> query = _context.CourseSchedules.Include(s => s.Course);
-
             if (role == "student")
             {
-                var student = await _context.Students.FirstOrDefaultAsync(s => s.UserId == userId);
+                var student = await _studentRepo.GetByUserIdAsync(userId);
                 if (student == null) return new List<ScheduleEntryDto>();
-                var courseIds = await _context.CourseStudents
-                    .Where(cs => cs.StudentId == student.Id)
-                    .Select(cs => cs.CourseId)
-                    .ToListAsync();
-                query = query.Where(s => courseIds.Contains(s.CourseId));
-            }
-            else if (role == "professor")
-            {
-                var professor = await _context.Professors.FirstOrDefaultAsync(p => p.UserId == userId);
-                if (professor == null) return new List<ScheduleEntryDto>();
-                query = query.Where(s => s.Course.ProfessorId == professor.Id);
+
+                var courseIds = await _studentRepo.GetCourseIdsAsync(student.Id);
+                var entries = await _scheduleRepo.GetForCoursesAsync(courseIds);
+                return entries.Select(ToDto).ToList();
             }
 
-            return await query
-                .OrderBy(s => s.DayOfWeek)
-                .ThenBy(s => s.StartTime)
-                .Select(s => ToDto(s))
-                .ToListAsync();
+            if (role == "professor")
+            {
+                var professor = await _professorRepo.GetByUserIdAsync(userId);
+                if (professor == null) return new List<ScheduleEntryDto>();
+
+                var entries = await _scheduleRepo.GetForProfessorAsync(professor.Id);
+                return entries.Select(ToDto).ToList();
+            }
+
+            var all = await _scheduleRepo.GetAllWithCourseAsync();
+            return all.Select(ToDto).ToList();
         }
 
         public async Task<(ScheduleEntryDto? entry, string? error)> CreateAsync(CreateScheduleDto dto)
         {
-            var course = await _context.Courses
-                .Include(c => c.Professor)
-                .FirstOrDefaultAsync(c => c.Id == dto.CourseId);
+            var course = await _courseRepo.GetWithDetailsAsync(dto.CourseId);
             if (course == null) return (null, "Course not found.");
 
             var start = TimeSpan.FromHours(dto.StartHour);
@@ -69,23 +77,19 @@ namespace WebAPI.Services
                 EndTime = end,
                 Room = string.IsNullOrWhiteSpace(dto.Room) ? null : dto.Room.Trim()
             };
-            _context.CourseSchedules.Add(entry);
-            await _context.SaveChangesAsync();
+            await _scheduleRepo.AddAsync(entry);
+            await _scheduleRepo.SaveChangesAsync();
 
-            await _context.Entry(entry).Reference(e => e.Course).LoadAsync();
-            return (ToDto(entry), null);
+            var saved = await _scheduleRepo.GetWithCourseAsync(entry.Id);
+            return (saved == null ? null : ToDto(saved), null);
         }
 
         public async Task<(ScheduleEntryDto? entry, string? error)> UpdateAsync(int id, UpdateScheduleDto dto)
         {
-            var entry = await _context.CourseSchedules
-                .Include(s => s.Course).ThenInclude(c => c.Professor)
-                .FirstOrDefaultAsync(s => s.Id == id);
+            var entry = await _scheduleRepo.GetWithCourseAsync(id);
             if (entry == null) return (null, "Schedule entry not found.");
 
-            var course = await _context.Courses
-                .Include(c => c.Professor)
-                .FirstOrDefaultAsync(c => c.Id == dto.CourseId);
+            var course = await _courseRepo.GetWithDetailsAsync(dto.CourseId);
             if (course == null) return (null, "Course not found.");
 
             var start = TimeSpan.FromHours(dto.StartHour);
@@ -104,45 +108,32 @@ namespace WebAPI.Services
             entry.Room = string.IsNullOrWhiteSpace(dto.Room) ? null : dto.Room.Trim();
             entry.Course = course;
 
-            await _context.SaveChangesAsync();
+            await _scheduleRepo.SaveChangesAsync();
             return (ToDto(entry), null);
         }
 
         public async Task<bool> DeleteAsync(int id)
         {
-            var entry = await _context.CourseSchedules.FindAsync(id);
+            var entry = await _scheduleRepo.GetByIdAsync(id);
             if (entry == null) return false;
-            _context.CourseSchedules.Remove(entry);
-            await _context.SaveChangesAsync();
+            _scheduleRepo.Delete(entry);
+            await _scheduleRepo.SaveChangesAsync();
             return true;
         }
 
-        // Returns an error message if there is a conflict, or null if clear.
         private async Task<string?> CheckConflictsAsync(
             string day, TimeSpan start, TimeSpan end,
             int? professorId, string? room, int? excludeId)
         {
-            var siblings = _context.CourseSchedules
-                .Include(s => s.Course)
-                .Where(s => s.DayOfWeek == day && (excludeId == null || s.Id != excludeId));
-
-            // Room conflict — only when a room is specified
             if (!string.IsNullOrWhiteSpace(room))
             {
-                var roomConflict = await siblings.AnyAsync(s =>
-                    s.Room == room.Trim() &&
-                    s.StartTime < end && s.EndTime > start);
-                if (roomConflict)
+                if (await _scheduleRepo.HasRoomConflictAsync(day, start, end, room.Trim(), excludeId))
                     return $"Room '{room}' is already booked on {day} during that time slot.";
             }
 
-            // Professor conflict
             if (professorId.HasValue)
             {
-                var profConflict = await siblings.AnyAsync(s =>
-                    s.Course.ProfessorId == professorId &&
-                    s.StartTime < end && s.EndTime > start);
-                if (profConflict)
+                if (await _scheduleRepo.HasProfessorConflictAsync(day, start, end, professorId.Value, excludeId))
                     return "The professor already has a class on that day and time.";
             }
 

@@ -1,31 +1,33 @@
-using Microsoft.EntityFrameworkCore;
-using WebAPI.Data;
 using WebAPI.DTOs;
 using WebAPI.Interfaces;
+using WebAPI.Interfaces.Repositories;
 using WebAPI.Models;
 
 namespace WebAPI.Services
 {
     public class GradeService : IGradeService
     {
-        private readonly AppDbContext _context;
-        public GradeService(AppDbContext context) => _context = context;
+        private readonly IGradeRepository _gradeRepo;
+        private readonly ICourseRepository _courseRepo;
+        private readonly IStudentRepository _studentRepo;
+
+        public GradeService(
+            IGradeRepository gradeRepo,
+            ICourseRepository courseRepo,
+            IStudentRepository studentRepo)
+        {
+            _gradeRepo = gradeRepo;
+            _courseRepo = courseRepo;
+            _studentRepo = studentRepo;
+        }
 
         public async Task<List<CourseStudentGradeDto>> GetCourseGradesAsync(int courseId)
         {
-            var enrolled = await _context.CourseStudents
-                .Where(cs => cs.CourseId == courseId)
-                .Include(cs => cs.Student)
-                .ToListAsync();
-
-            var grades = await _context.Grades
-                .Where(g => g.CourseId == courseId)
-                .Include(g => g.GradedBy)
-                .ToListAsync();
-
+            var enrollments = await _courseRepo.GetCourseStudentsAsync(courseId);
+            var grades = await _gradeRepo.GetByCourseIdAsync(courseId);
             var gradeMap = grades.ToDictionary(g => g.StudentId);
 
-            return enrolled.Select(cs =>
+            return enrollments.Select(cs =>
             {
                 gradeMap.TryGetValue(cs.StudentId, out var grade);
                 return new CourseStudentGradeDto
@@ -47,16 +49,11 @@ namespace WebAPI.Services
 
         public async Task<List<GradeResponseDto>> GetMyGradesAsync(int userId)
         {
-            var student = await _context.Students.FirstOrDefaultAsync(s => s.UserId == userId);
+            var student = await _studentRepo.GetByUserIdAsync(userId);
             if (student == null) return new List<GradeResponseDto>();
 
-            return await _context.Grades
-                .Where(g => g.StudentId == student.Id)
-                .Include(g => g.Course)
-                .Include(g => g.GradedBy)
-                .OrderByDescending(g => g.GradedAt)
-                .Select(g => MapToDto(g))
-                .ToListAsync();
+            var grades = await _gradeRepo.GetByStudentIdWithDetailsAsync(student.Id);
+            return grades.Select(MapToDto).ToList();
         }
 
         public async Task<(GradeResponseDto? grade, string? error)> UpsertAsync(UpsertGradeDto dto, int gradedByUserId)
@@ -64,19 +61,17 @@ namespace WebAPI.Services
             if (dto.GradeValue < 0 || dto.GradeValue > 100)
                 return (null, "Grade value must be between 0 and 100.");
 
-            var courseExists = await _context.Courses.AnyAsync(c => c.Id == dto.CourseId);
-            if (!courseExists) return (null, "Course not found.");
+            if (await _courseRepo.GetByIdAsync(dto.CourseId) == null)
+                return (null, "Course not found.");
 
-            var isEnrolled = await _context.CourseStudents
-                .AnyAsync(cs => cs.CourseId == dto.CourseId && cs.StudentId == dto.StudentId);
-            if (!isEnrolled) return (null, "Student is not enrolled in this course.");
-
-            var existing = await _context.Grades
-                .FirstOrDefaultAsync(g => g.CourseId == dto.CourseId && g.StudentId == dto.StudentId);
+            if (!await _courseRepo.IsEnrolledAsync(dto.CourseId, dto.StudentId))
+                return (null, "Student is not enrolled in this course.");
 
             var letterGrade = string.IsNullOrWhiteSpace(dto.LetterGrade)
                 ? ComputeLetterGrade(dto.GradeValue)
                 : dto.LetterGrade;
+
+            var existing = await _gradeRepo.GetByCourseAndStudentAsync(dto.CourseId, dto.StudentId);
 
             if (existing != null)
             {
@@ -85,7 +80,7 @@ namespace WebAPI.Services
                 existing.Comments = dto.Comments;
                 existing.GradedAt = DateTime.UtcNow;
                 existing.GradedByUserId = gradedByUserId;
-                await _context.SaveChangesAsync();
+                await _gradeRepo.SaveChangesAsync();
                 return (await LoadDto(existing.Id), null);
             }
 
@@ -100,27 +95,23 @@ namespace WebAPI.Services
                 GradedByUserId = gradedByUserId
             };
 
-            _context.Grades.Add(grade);
-            await _context.SaveChangesAsync();
+            await _gradeRepo.AddAsync(grade);
+            await _gradeRepo.SaveChangesAsync();
             return (await LoadDto(grade.Id), null);
         }
 
         public async Task<bool> DeleteAsync(int id)
         {
-            var grade = await _context.Grades.FindAsync(id);
+            var grade = await _gradeRepo.GetByIdAsync(id);
             if (grade == null) return false;
-            _context.Grades.Remove(grade);
-            await _context.SaveChangesAsync();
+            _gradeRepo.Delete(grade);
+            await _gradeRepo.SaveChangesAsync();
             return true;
         }
 
         private async Task<GradeResponseDto?> LoadDto(int id)
         {
-            var g = await _context.Grades
-                .Include(g => g.Course)
-                .Include(g => g.Student)
-                .Include(g => g.GradedBy)
-                .FirstOrDefaultAsync(g => g.Id == id);
+            var g = await _gradeRepo.GetWithDetailsAsync(id);
             return g == null ? null : MapToDto(g);
         }
 

@@ -1,59 +1,62 @@
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
-using WebAPI.Data;
 using WebAPI.DTOs;
 using WebAPI.Interfaces;
+using WebAPI.Interfaces.Repositories;
 using WebAPI.Models;
 
 namespace WebAPI.Services
 {
     public class AdminService : IAdminService
     {
-        private readonly AppDbContext _context;
+        private readonly IUserRepository _userRepo;
+        private readonly IStudentRepository _studentRepo;
+        private readonly IProfessorRepository _professorRepo;
         private readonly PasswordHasher<User> _passwordHasher;
 
-        public AdminService(AppDbContext context)
+        public AdminService(
+            IUserRepository userRepo,
+            IStudentRepository studentRepo,
+            IProfessorRepository professorRepo)
         {
-            _context = context;
+            _userRepo = userRepo;
+            _studentRepo = studentRepo;
+            _professorRepo = professorRepo;
             _passwordHasher = new PasswordHasher<User>();
         }
 
         public async Task<int> GetPendingStudentCountAsync() =>
-            await _context.Users.CountAsync(u => u.Role == "student" && u.Status == "pending");
+            await _userRepo.CountPendingStudentsAsync();
 
         public async Task<List<PendingStudentDto>> GetPendingStudentsAsync()
         {
-            return await _context.Users
-                .Where(u => u.Role == "student" && u.Status == "pending")
-                .OrderBy(u => u.CreatedAt)
-                .Select(u => new PendingStudentDto
-                {
-                    Id = u.Id,
-                    FullName = u.FullName,
-                    Email = u.Email,
-                    Status = u.Status,
-                    CreatedAt = u.CreatedAt
-                })
-                .ToListAsync();
+            var users = await _userRepo.GetPendingStudentsAsync();
+            return users.Select(u => new PendingStudentDto
+            {
+                Id = u.Id,
+                FullName = u.FullName,
+                Email = u.Email,
+                Status = u.Status,
+                CreatedAt = u.CreatedAt
+            }).ToList();
         }
 
         public async Task<bool> ApproveStudentAsync(int id)
         {
-            var user = await _context.Users.FindAsync(id);
+            var user = await _userRepo.GetByIdAsync(id);
             if (user == null || user.Role != "student") return false;
 
             user.Status = "approved";
-            await _context.SaveChangesAsync();
+            await _userRepo.SaveChangesAsync();
             return true;
         }
 
         public async Task<bool> RejectStudentAsync(int id)
         {
-            var user = await _context.Users.FindAsync(id);
+            var user = await _userRepo.GetByIdAsync(id);
             if (user == null || user.Role != "student") return false;
 
             user.Status = "rejected";
-            await _context.SaveChangesAsync();
+            await _userRepo.SaveChangesAsync();
             return true;
         }
 
@@ -61,8 +64,7 @@ namespace WebAPI.Services
         {
             var email = dto.Email.Trim().ToLower();
 
-            var exists = await _context.Users.AnyAsync(u => u.Email == email);
-            if (exists) return null;
+            if (await _userRepo.ExistsByEmailAsync(email)) return null;
 
             var user = new User
             {
@@ -75,8 +77,8 @@ namespace WebAPI.Services
             };
 
             user.PasswordHash = _passwordHasher.HashPassword(user, dto.Password);
-            _context.Users.Add(user);
-            await _context.SaveChangesAsync();
+            await _userRepo.AddAsync(user);
+            await _userRepo.SaveChangesAsync();
 
             var student = new Student
             {
@@ -86,18 +88,25 @@ namespace WebAPI.Services
                 Department = dto.Department.Trim(),
                 CreatedAt = user.CreatedAt
             };
-            _context.Students.Add(student);
-            await _context.SaveChangesAsync();
+            await _studentRepo.AddAsync(student);
+            await _studentRepo.SaveChangesAsync();
 
-            return new StudentDto { Id = student.Id, FullName = student.FullName, Email = student.Email, Department = student.Department, Status = user.Status, CreatedAt = student.CreatedAt };
+            return new StudentDto
+            {
+                Id = student.Id,
+                FullName = student.FullName,
+                Email = student.Email,
+                Department = student.Department,
+                Status = user.Status,
+                CreatedAt = student.CreatedAt
+            };
         }
 
         public async Task<ProfessorDto?> AddProfessorAsync(AddProfessorDto dto)
         {
             var email = dto.Email.Trim().ToLower();
 
-            var exists = await _context.Users.AnyAsync(u => u.Email == email);
-            if (exists) return null;
+            if (await _userRepo.ExistsByEmailAsync(email)) return null;
 
             var user = new User
             {
@@ -110,8 +119,8 @@ namespace WebAPI.Services
             };
 
             user.PasswordHash = _passwordHasher.HashPassword(user, dto.Password);
-            _context.Users.Add(user);
-            await _context.SaveChangesAsync();
+            await _userRepo.AddAsync(user);
+            await _userRepo.SaveChangesAsync();
 
             var professor = new Professor
             {
@@ -121,79 +130,70 @@ namespace WebAPI.Services
                 Department = dto.Department.Trim(),
                 CreatedAt = user.CreatedAt
             };
-            _context.Professors.Add(professor);
-            await _context.SaveChangesAsync();
+            await _professorRepo.AddAsync(professor);
+            await _professorRepo.SaveChangesAsync();
 
-            return new ProfessorDto { Id = professor.Id, FullName = professor.FullName, Email = professor.Email, Department = professor.Department, CreatedAt = professor.CreatedAt };
+            return new ProfessorDto
+            {
+                Id = professor.Id,
+                FullName = professor.FullName,
+                Email = professor.Email,
+                Department = professor.Department,
+                CreatedAt = professor.CreatedAt
+            };
         }
 
         public async Task<List<ProfessorDto>> GetProfessorsAsync()
         {
-            return await _context.Professors
-                .OrderBy(p => p.FullName)
-                .Select(p => new ProfessorDto
-                {
-                    Id = p.Id,
-                    FullName = p.FullName,
-                    Email = p.Email,
-                    Department = p.Department ?? string.Empty,
-                    CreatedAt = p.CreatedAt
-                })
-                .ToListAsync();
+            var professors = await _professorRepo.GetAllOrderedAsync();
+            return professors.Select(p => new ProfessorDto
+            {
+                Id = p.Id,
+                FullName = p.FullName,
+                Email = p.Email,
+                Department = p.Department ?? string.Empty,
+                CreatedAt = p.CreatedAt
+            }).ToList();
         }
 
         public async Task<List<StudentDto>> GetAllStudentsAsync()
         {
-            return await _context.Students
-                .Include(s => s.User)
-                .OrderBy(s => s.FullName)
-                .Select(s => new StudentDto
-                {
-                    Id = s.Id,
-                    FullName = s.FullName,
-                    Email = s.Email,
-                    Department = s.Department ?? string.Empty,
-                    Status = s.User.Status,
-                    CreatedAt = s.CreatedAt
-                })
-                .ToListAsync();
+            var students = await _studentRepo.GetAllWithUserAsync();
+            return students.Select(s => new StudentDto
+            {
+                Id = s.Id,
+                FullName = s.FullName,
+                Email = s.Email,
+                Department = s.Department ?? string.Empty,
+                Status = s.User.Status,
+                CreatedAt = s.CreatedAt
+            }).ToList();
         }
 
         public async Task<List<StudentDto>> GetStudentsForProfessorAsync(int professorUserId)
         {
-            var professor = await _context.Professors.FirstOrDefaultAsync(p => p.UserId == professorUserId);
+            var professor = await _professorRepo.GetByUserIdAsync(professorUserId);
             if (professor == null) return new List<StudentDto>();
 
-            var studentIds = await _context.CourseStudents
-                .Where(cs => cs.Course.ProfessorId == professor.Id)
-                .Select(cs => cs.StudentId)
-                .Distinct()
-                .ToListAsync();
-
-            return await _context.Students
-                .Include(s => s.User)
-                .Where(s => studentIds.Contains(s.Id))
-                .OrderBy(s => s.FullName)
-                .Select(s => new StudentDto
-                {
-                    Id = s.Id,
-                    FullName = s.FullName,
-                    Email = s.Email,
-                    Department = s.Department ?? string.Empty,
-                    Status = s.User.Status,
-                    CreatedAt = s.CreatedAt
-                })
-                .ToListAsync();
+            var students = await _studentRepo.GetAllWithUserAsync();
+            return students.Select(s => new StudentDto
+            {
+                Id = s.Id,
+                FullName = s.FullName,
+                Email = s.Email,
+                Department = s.Department ?? string.Empty,
+                Status = s.User.Status,
+                CreatedAt = s.CreatedAt
+            }).ToList();
         }
 
         public async Task<bool> UpdateStudentAsync(int id, UpdateUserDto dto)
         {
             var email = dto.Email.Trim().ToLower();
-            var student = await _context.Students.Include(s => s.User).FirstOrDefaultAsync(s => s.Id == id);
+            var student = await _studentRepo.GetWithUserAsync(id);
             if (student == null) return false;
 
-            var emailTaken = await _context.Users.AnyAsync(u => u.Email == email && u.Id != student.UserId);
-            if (emailTaken) return false;
+            if (await _userRepo.ExistsByEmailAsync(email, student.UserId)) return false;
 
             student.FullName = dto.FullName.Trim();
             student.Email = email;
@@ -201,18 +201,17 @@ namespace WebAPI.Services
                 student.Department = dto.Department.Trim();
             student.User.FullName = dto.FullName.Trim();
             student.User.Email = email;
-            await _context.SaveChangesAsync();
+            await _studentRepo.SaveChangesAsync();
             return true;
         }
 
         public async Task<bool> UpdateProfessorAsync(int id, UpdateUserDto dto)
         {
             var email = dto.Email.Trim().ToLower();
-            var professor = await _context.Professors.Include(p => p.User).FirstOrDefaultAsync(p => p.Id == id);
+            var professor = await _professorRepo.GetWithUserAsync(id);
             if (professor == null) return false;
 
-            var emailTaken = await _context.Users.AnyAsync(u => u.Email == email && u.Id != professor.UserId);
-            if (emailTaken) return false;
+            if (await _userRepo.ExistsByEmailAsync(email, professor.UserId)) return false;
 
             professor.FullName = dto.FullName.Trim();
             professor.Email = email;
@@ -220,27 +219,27 @@ namespace WebAPI.Services
                 professor.Department = dto.Department.Trim();
             professor.User.FullName = dto.FullName.Trim();
             professor.User.Email = email;
-            await _context.SaveChangesAsync();
+            await _professorRepo.SaveChangesAsync();
             return true;
         }
 
         public async Task<bool> DeleteStudentAsync(int id)
         {
-            var student = await _context.Students.Include(s => s.User).FirstOrDefaultAsync(s => s.Id == id);
+            var student = await _studentRepo.GetWithUserAsync(id);
             if (student == null) return false;
 
-            _context.Users.Remove(student.User);
-            await _context.SaveChangesAsync();
+            _userRepo.Delete(student.User);
+            await _userRepo.SaveChangesAsync();
             return true;
         }
 
         public async Task<bool> DeleteProfessorAsync(int id)
         {
-            var professor = await _context.Professors.Include(p => p.User).FirstOrDefaultAsync(p => p.Id == id);
+            var professor = await _professorRepo.GetWithUserAsync(id);
             if (professor == null) return false;
 
-            _context.Users.Remove(professor.User);
-            await _context.SaveChangesAsync();
+            _userRepo.Delete(professor.User);
+            await _userRepo.SaveChangesAsync();
             return true;
         }
     }

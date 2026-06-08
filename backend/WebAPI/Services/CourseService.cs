@@ -1,66 +1,52 @@
-using Microsoft.EntityFrameworkCore;
-using WebAPI.Data;
 using WebAPI.DTOs;
 using WebAPI.Interfaces;
+using WebAPI.Interfaces.Repositories;
 using WebAPI.Models;
 
 namespace WebAPI.Services
 {
     public class CourseService : ICourseService
     {
-        private readonly AppDbContext _context;
+        private readonly ICourseRepository _courseRepo;
+        private readonly IStudentRepository _studentRepo;
+        private readonly IProfessorRepository _professorRepo;
 
-        public CourseService(AppDbContext context)
+        public CourseService(
+            ICourseRepository courseRepo,
+            IStudentRepository studentRepo,
+            IProfessorRepository professorRepo)
         {
-            _context = context;
+            _courseRepo = courseRepo;
+            _studentRepo = studentRepo;
+            _professorRepo = professorRepo;
         }
 
         public async Task<List<CourseResponseDto>> GetAllAsync(string? search, string? status, string? department, int? userId = null, string? role = null)
         {
-            var query = _context.Courses
-                .Include(c => c.Professor)
-                .Include(c => c.CourseStudents)
-                .AsQueryable();
+            int? professorId = null;
+            IEnumerable<int>? studentCourseIds = null;
 
             if (role == "professor" && userId.HasValue)
             {
-                var professor = await _context.Professors.FirstOrDefaultAsync(p => p.UserId == userId.Value);
+                var professor = await _professorRepo.GetByUserIdAsync(userId.Value);
                 if (professor != null && !string.IsNullOrWhiteSpace(professor.Department))
-                    query = query.Where(c => c.Department == professor.Department);
+                    department = professor.Department;
             }
 
             if (role == "student" && userId.HasValue)
             {
-                var student = await _context.Students.FirstOrDefaultAsync(s => s.UserId == userId.Value);
+                var student = await _studentRepo.GetByUserIdAsync(userId.Value);
                 if (student != null && !string.IsNullOrWhiteSpace(student.Department))
-                    query = query.Where(c => c.Department == student.Department);
+                    department = student.Department;
             }
 
-            if (!string.IsNullOrWhiteSpace(search))
-                query = query.Where(c =>
-                    c.Title.Contains(search) ||
-                    c.Code.Contains(search) ||
-                    c.Department.Contains(search));
-
-            if (!string.IsNullOrWhiteSpace(status))
-                query = query.Where(c => c.Status == status);
-
-            if (!string.IsNullOrWhiteSpace(department))
-                query = query.Where(c => c.Department == department);
-
-            return await query
-                .OrderBy(c => c.Title)
-                .Select(c => MapToDto(c))
-                .ToListAsync();
+            var courses = await _courseRepo.GetAllWithDetailsAsync(search, status, department, professorId, studentCourseIds);
+            return courses.Select(MapToDto).ToList();
         }
 
         public async Task<CourseResponseDto?> GetByIdAsync(int id)
         {
-            var course = await _context.Courses
-                .Include(c => c.Professor)
-                .Include(c => c.CourseStudents)
-                .FirstOrDefaultAsync(c => c.Id == id);
-
+            var course = await _courseRepo.GetWithDetailsAsync(id);
             return course == null ? null : MapToDto(course);
         }
 
@@ -69,8 +55,8 @@ namespace WebAPI.Services
             var code = dto.Code.Trim().ToUpper();
             var semester = dto.Semester.Trim();
 
-            var duplicate = await _context.Courses.AnyAsync(c => c.Code == code && c.Semester == semester);
-            if (duplicate) return (null, $"Course {code} already exists in {semester}.");
+            if (await _courseRepo.ExistsByCodeAndSemesterAsync(code, semester))
+                return (null, $"Course {code} already exists in {semester}.");
 
             var course = new Course
             {
@@ -86,22 +72,22 @@ namespace WebAPI.Services
                 CreatedAt = DateTime.UtcNow
             };
 
-            _context.Courses.Add(course);
-            await _context.SaveChangesAsync();
+            await _courseRepo.AddAsync(course);
+            await _courseRepo.SaveChangesAsync();
 
             return (await GetByIdAsync(course.Id) ?? MapToDto(course), null);
         }
 
         public async Task<(CourseResponseDto? course, string? error)> UpdateAsync(int id, UpdateCourseDto dto)
         {
-            var course = await _context.Courses.FindAsync(id);
+            var course = await _courseRepo.GetByIdAsync(id);
             if (course == null) return (null, "Course not found.");
 
             var code = dto.Code.Trim().ToUpper();
             var semester = dto.Semester.Trim();
 
-            var duplicate = await _context.Courses.AnyAsync(c => c.Code == code && c.Semester == semester && c.Id != id);
-            if (duplicate) return (null, $"Course {code} already exists in {semester}.");
+            if (await _courseRepo.ExistsByCodeAndSemesterAsync(code, semester, id))
+                return (null, $"Course {code} already exists in {semester}.");
 
             var allowed = new[] { "draft", "active", "archived" };
             if (!string.IsNullOrWhiteSpace(dto.Status) && allowed.Contains(dto.Status))
@@ -117,7 +103,7 @@ namespace WebAPI.Services
             course.Semester = semester;
             course.UpdatedAt = DateTime.UtcNow;
 
-            await _context.SaveChangesAsync();
+            await _courseRepo.SaveChangesAsync();
             return (await GetByIdAsync(id), null);
         }
 
@@ -126,109 +112,91 @@ namespace WebAPI.Services
             var allowed = new[] { "draft", "active", "archived" };
             if (!allowed.Contains(status)) return false;
 
-            var course = await _context.Courses.FindAsync(id);
+            var course = await _courseRepo.GetByIdAsync(id);
             if (course == null) return false;
 
             course.Status = status;
             course.UpdatedAt = DateTime.UtcNow;
-            await _context.SaveChangesAsync();
+            await _courseRepo.SaveChangesAsync();
             return true;
         }
 
         public async Task<bool> AssignProfessorAsync(int id, int? professorId)
         {
-            var course = await _context.Courses.FindAsync(id);
+            var course = await _courseRepo.GetByIdAsync(id);
             if (course == null) return false;
 
-            if (professorId.HasValue)
-            {
-                var exists = await _context.Professors.AnyAsync(p => p.Id == professorId.Value);
-                if (!exists) return false;
-            }
+            if (professorId.HasValue && !await _professorRepo.ExistsByIdAsync(professorId.Value))
+                return false;
 
             course.ProfessorId = professorId;
             course.UpdatedAt = DateTime.UtcNow;
-            await _context.SaveChangesAsync();
+            await _courseRepo.SaveChangesAsync();
             return true;
         }
 
         public async Task<List<EnrolledStudentDto>> GetStudentsAsync(int courseId)
         {
-            return await _context.CourseStudents
-                .Where(cs => cs.CourseId == courseId)
-                .Include(cs => cs.Student)
-                .OrderBy(cs => cs.Student.FullName)
-                .Select(cs => new EnrolledStudentDto
-                {
-                    StudentId = cs.StudentId,
-                    FullName = cs.Student.FullName,
-                    Email = cs.Student.Email,
-                    EnrolledAt = cs.EnrolledAt
-                })
-                .ToListAsync();
+            var enrollments = await _courseRepo.GetCourseStudentsAsync(courseId);
+            return enrollments.Select(cs => new EnrolledStudentDto
+            {
+                StudentId = cs.StudentId,
+                FullName = cs.Student.FullName,
+                Email = cs.Student.Email,
+                EnrolledAt = cs.EnrolledAt
+            }).ToList();
         }
 
         public async Task<(bool success, string error)> EnrollStudentAsync(int courseId, int studentId)
         {
-            var course = await _context.Courses
-                .Include(c => c.CourseStudents)
-                .FirstOrDefaultAsync(c => c.Id == courseId);
-
+            var course = await _courseRepo.GetWithDetailsAsync(courseId);
             if (course == null) return (false, "Course not found.");
 
-            var studentExists = await _context.Students.AnyAsync(s => s.Id == studentId);
-            if (!studentExists) return (false, "Student not found.");
+            if (await _studentRepo.GetByIdAsync(studentId) == null) return (false, "Student not found.");
 
-            var alreadyEnrolled = course.CourseStudents.Any(cs => cs.StudentId == studentId);
-            if (alreadyEnrolled) return (false, "Student is already enrolled.");
+            if (await _courseRepo.IsEnrolledAsync(courseId, studentId))
+                return (false, "Student is already enrolled.");
 
             if (course.CourseStudents.Count >= course.Capacity)
                 return (false, "Course is at full capacity.");
 
-            _context.CourseStudents.Add(new CourseStudent
+            await _courseRepo.AddEnrollmentAsync(new CourseStudent
             {
                 CourseId = courseId,
                 StudentId = studentId,
                 EnrolledAt = DateTime.UtcNow
             });
 
-            await _context.SaveChangesAsync();
+            await _courseRepo.SaveChangesAsync();
             return (true, string.Empty);
         }
 
         public async Task<bool> DeleteAsync(int id)
         {
-            var course = await _context.Courses.FindAsync(id);
+            var course = await _courseRepo.GetByIdAsync(id);
             if (course == null) return false;
-            _context.Courses.Remove(course);
-            await _context.SaveChangesAsync();
+            _courseRepo.Delete(course);
+            await _courseRepo.SaveChangesAsync();
             return true;
         }
 
         public async Task<bool> RemoveStudentAsync(int courseId, int studentId)
         {
-            var enrollment = await _context.CourseStudents
-                .FirstOrDefaultAsync(cs => cs.CourseId == courseId && cs.StudentId == studentId);
-
+            var enrollment = await _courseRepo.GetEnrollmentAsync(courseId, studentId);
             if (enrollment == null) return false;
 
-            _context.CourseStudents.Remove(enrollment);
-            await _context.SaveChangesAsync();
+            _courseRepo.RemoveEnrollment(enrollment);
+            await _courseRepo.SaveChangesAsync();
             return true;
         }
 
         public async Task<List<CourseResponseDto>> GetEnrolledCoursesAsync(int userId)
         {
-            var student = await _context.Students.FirstOrDefaultAsync(s => s.UserId == userId);
+            var student = await _studentRepo.GetByUserIdAsync(userId);
             if (student == null) return new List<CourseResponseDto>();
 
-            return await _context.Courses
-                .Include(c => c.Professor)
-                .Include(c => c.CourseStudents)
-                .Where(c => c.CourseStudents.Any(cs => cs.StudentId == student.Id))
-                .OrderBy(c => c.Title)
-                .Select(c => MapToDto(c))
-                .ToListAsync();
+            var courses = await _courseRepo.GetEnrolledCoursesAsync(student.Id);
+            return courses.Select(MapToDto).ToList();
         }
 
         private static CourseResponseDto MapToDto(Course c) => new()

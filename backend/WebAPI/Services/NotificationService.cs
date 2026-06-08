@@ -1,32 +1,31 @@
-using Microsoft.EntityFrameworkCore;
-using WebAPI.Data;
 using WebAPI.DTOs;
 using WebAPI.Interfaces;
+using WebAPI.Interfaces.Repositories;
 using WebAPI.Models;
 
 namespace WebAPI.Services
 {
     public class NotificationService : INotificationService
     {
-        private readonly AppDbContext _context;
-        public NotificationService(AppDbContext context) => _context = context;
+        private readonly INotificationRepository _notifRepo;
 
-        public async Task<List<NotificationDto>> GetAllAsync() =>
-            await _context.Notifications
-                .OrderByDescending(n => n.CreatedAt)
-                .Select(n => Map(n))
-                .ToListAsync();
+        public NotificationService(INotificationRepository notifRepo) => _notifRepo = notifRepo;
 
-        public async Task<List<NotificationDto>> GetByUserIdAsync(int userId) =>
-            await _context.Notifications
-                .Where(n => n.UserId == userId)
-                .OrderByDescending(n => n.CreatedAt)
-                .Select(n => Map(n))
-                .ToListAsync();
+        public async Task<List<NotificationDto>> GetAllAsync()
+        {
+            var list = await _notifRepo.GetAllOrderedAsync();
+            return list.Select(Map).ToList();
+        }
+
+        public async Task<List<NotificationDto>> GetByUserIdAsync(int userId)
+        {
+            var list = await _notifRepo.GetByUserIdAsync(userId);
+            return list.Select(Map).ToList();
+        }
 
         public async Task<NotificationDto?> GetByIdAsync(int id)
         {
-            var n = await _context.Notifications.FindAsync(id);
+            var n = await _notifRepo.GetByIdAsync(id);
             return n == null ? null : Map(n);
         }
 
@@ -41,44 +40,42 @@ namespace WebAPI.Services
                 IsRead = false,
                 CreatedAt = DateTime.UtcNow
             };
-            _context.Notifications.Add(n);
-            await _context.SaveChangesAsync();
+            await _notifRepo.AddAsync(n);
+            await _notifRepo.SaveChangesAsync();
             return Map(n);
         }
 
         public async Task<bool> MarkAsReadAsync(int id)
         {
-            var n = await _context.Notifications.FindAsync(id);
+            var n = await _notifRepo.GetByIdAsync(id);
             if (n == null) return false;
             if (!n.IsRead)
             {
                 n.IsRead = true;
                 n.ReadAt = DateTime.UtcNow;
-                await _context.SaveChangesAsync();
+                await _notifRepo.SaveChangesAsync();
             }
             return true;
         }
 
         public async Task MarkAllAsReadAsync(int userId)
         {
-            var unread = await _context.Notifications
-                .Where(n => n.UserId == userId && !n.IsRead)
-                .ToListAsync();
+            var unread = await _notifRepo.GetUnreadByUserIdAsync(userId);
             foreach (var n in unread) { n.IsRead = true; n.ReadAt = DateTime.UtcNow; }
-            await _context.SaveChangesAsync();
+            await _notifRepo.SaveChangesAsync();
         }
 
         public async Task<bool> DeleteAsync(int id)
         {
-            var n = await _context.Notifications.FindAsync(id);
+            var n = await _notifRepo.GetByIdAsync(id);
             if (n == null) return false;
-            _context.Notifications.Remove(n);
-            await _context.SaveChangesAsync();
+            _notifRepo.Delete(n);
+            await _notifRepo.SaveChangesAsync();
             return true;
         }
 
         public async Task<int> GetUnreadCountAsync(int userId) =>
-            await _context.Notifications.CountAsync(n => n.UserId == userId && !n.IsRead);
+            await _notifRepo.GetUnreadCountAsync(userId);
 
         private static NotificationDto Map(Notification n) => new()
         {
