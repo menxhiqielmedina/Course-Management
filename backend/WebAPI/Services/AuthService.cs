@@ -3,7 +3,9 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using WebAPI.Data;
 using WebAPI.DTOs;
 using WebAPI.Interfaces;
 using WebAPI.Interfaces.Repositories;
@@ -16,6 +18,8 @@ namespace WebAPI.Services
         private readonly IUserRepository _userRepo;
         private readonly IStudentRepository _studentRepo;
         private readonly IProfessorRepository _professorRepo;
+        private readonly IRefreshTokenRepository _refreshTokenRepo;
+        private readonly AppDbContext _context;
         private readonly PasswordHasher<User> _passwordHasher;
         private readonly IConfiguration _config;
 
@@ -23,11 +27,15 @@ namespace WebAPI.Services
             IUserRepository userRepo,
             IStudentRepository studentRepo,
             IProfessorRepository professorRepo,
+            IRefreshTokenRepository refreshTokenRepo,
+            AppDbContext context,
             IConfiguration config)
         {
             _userRepo = userRepo;
             _studentRepo = studentRepo;
             _professorRepo = professorRepo;
+            _refreshTokenRepo = refreshTokenRepo;
+            _context = context;
             _config = config;
             _passwordHasher = new PasswordHasher<User>();
         }
@@ -46,13 +54,27 @@ namespace WebAPI.Services
                 Email = email,
                 Role = role,
                 Status = role == "student" ? "pending" : "approved",
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
             };
 
             user.PasswordHash = _passwordHasher.HashPassword(user, dto.Password);
 
             await _userRepo.AddAsync(user);
             await _userRepo.SaveChangesAsync();
+
+            // Assign role to UserRoles table
+            var roleEntity = await _context.Roles.FirstOrDefaultAsync(r => r.Name == role);
+            if (roleEntity != null)
+            {
+                _context.UserRoles.Add(new UserRole
+                {
+                    UserId = user.Id,
+                    RoleId = roleEntity.Id,
+                    AssignedAt = DateTime.UtcNow
+                });
+                await _context.SaveChangesAsync();
+            }
 
             if (role == "student")
             {
@@ -61,7 +83,7 @@ namespace WebAPI.Services
                     UserId = user.Id,
                     FullName = user.FullName,
                     Email = user.Email,
-                    Department = dto.Department.Trim(),
+                    Department = dto.Department?.Trim() ?? string.Empty,
                     CreatedAt = user.CreatedAt
                 });
                 await _studentRepo.SaveChangesAsync();
@@ -106,12 +128,15 @@ namespace WebAPI.Services
         public async Task<AuthResponseDto?> RefreshAsync(string refreshToken)
         {
             var hashed = HashToken(refreshToken);
-            var user = await _userRepo.FindByRefreshTokenAsync(hashed);
+            var token = await _refreshTokenRepo.FindActiveByHashAsync(hashed);
 
-            if (user == null || user.RefreshTokenExpiry == null || user.RefreshTokenExpiry < DateTime.UtcNow)
-                return null;
+            if (token == null) return null;
 
-            return await IssueTokensAsync(user);
+            // Rotate: revoke old, issue new
+            await _refreshTokenRepo.RevokeAllForUserAsync(token.UserId);
+            await _refreshTokenRepo.SaveChangesAsync();
+
+            return await IssueTokensAsync(token.User);
         }
 
         public async Task RevokeAsync(string? refreshToken)
@@ -119,12 +144,11 @@ namespace WebAPI.Services
             if (string.IsNullOrEmpty(refreshToken)) return;
 
             var hashed = HashToken(refreshToken);
-            var user = await _userRepo.FindByRefreshTokenAsync(hashed);
-            if (user == null) return;
+            var token = await _refreshTokenRepo.FindActiveByHashAsync(hashed);
+            if (token == null) return;
 
-            user.RefreshToken = null;
-            user.RefreshTokenExpiry = null;
-            await _userRepo.SaveChangesAsync();
+            await _refreshTokenRepo.RevokeAllForUserAsync(token.UserId);
+            await _refreshTokenRepo.SaveChangesAsync();
         }
 
         public async Task<bool> ChangePasswordAsync(int userId, ChangePasswordDto dto)
@@ -137,6 +161,7 @@ namespace WebAPI.Services
 
             user.PasswordHash = _passwordHasher.HashPassword(user, dto.NewPassword);
             user.MustChangePassword = false;
+            user.UpdatedAt = DateTime.UtcNow;
             await _userRepo.SaveChangesAsync();
             return true;
         }
@@ -147,9 +172,15 @@ namespace WebAPI.Services
             var (plainRefresh, hashedRefresh) = GenerateRefreshToken();
 
             var days = int.Parse(_config["JwtSettings:RefreshTokenDays"] ?? "7");
-            user.RefreshToken = hashedRefresh;
-            user.RefreshTokenExpiry = DateTime.UtcNow.AddDays(days);
-            await _userRepo.SaveChangesAsync();
+
+            await _refreshTokenRepo.AddAsync(new RefreshToken
+            {
+                UserId = user.Id,
+                TokenHash = hashedRefresh,
+                ExpiresAt = DateTime.UtcNow.AddDays(days),
+                CreatedAt = DateTime.UtcNow
+            });
+            await _refreshTokenRepo.SaveChangesAsync();
 
             return new AuthResponseDto
             {

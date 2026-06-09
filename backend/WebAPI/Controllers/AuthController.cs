@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using WebAPI.DTOs;
 using WebAPI.Interfaces;
+using WebAPI.Interfaces.Repositories;
 
 namespace WebAPI.Controllers
 {
@@ -12,12 +13,21 @@ namespace WebAPI.Controllers
     {
         private readonly IAuthService _authService;
         private readonly IAuditLogService _audit;
+        private readonly INotificationService _notifService;
+        private readonly IUserRepository _userRepo;
         private readonly IConfiguration _config;
 
-        public AuthController(IAuthService authService, IAuditLogService audit, IConfiguration config)
+        public AuthController(
+            IAuthService authService,
+            IAuditLogService audit,
+            INotificationService notifService,
+            IUserRepository userRepo,
+            IConfiguration config)
         {
             _authService = authService;
             _audit = audit;
+            _notifService = notifService;
+            _userRepo = userRepo;
             _config = config;
         }
 
@@ -27,6 +37,22 @@ namespace WebAPI.Controllers
             var result = await _authService.RegisterAsync(dto);
             if (result == null)
                 return BadRequest(new { message = "Email already exists." });
+
+            // Notify all admins when a student signs up (pending approval)
+            if (result.Role == "student")
+            {
+                var adminIds = await _userRepo.GetAdminUserIdsAsync();
+                foreach (var adminId in adminIds)
+                {
+                    await _notifService.CreateAsync(new CreateNotificationDto
+                    {
+                        UserId = adminId,
+                        Title = "New student signup",
+                        Message = $"{result.FullName} has registered and is pending approval.",
+                        Type = "info"
+                    });
+                }
+            }
 
             SetRefreshCookie(result.RefreshToken!);
             result.RefreshToken = null;
@@ -42,7 +68,7 @@ namespace WebAPI.Controllers
             {
                 SetRefreshCookie(result.Data.RefreshToken!);
                 result.Data.RefreshToken = null;
-                await _audit.LogAsync(result.Data.Id, "LOGIN", "User", result.Data.Id.ToString(), $"Role: {result.Data.Role}", HttpContext.Connection.RemoteIpAddress?.ToString());
+                await _audit.LogWithNameAsync(result.Data.Id, result.Data.FullName, "LOGIN", "User", result.Data.Id.ToString(), $"Role: {result.Data.Role}", HttpContext.Connection.RemoteIpAddress?.ToString());
                 return Ok(result.Data);
             }
 
