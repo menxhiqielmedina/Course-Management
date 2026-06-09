@@ -28,10 +28,11 @@ namespace WebAPI.Models
 
         public bool MustChangePassword { get; set; } = false;
 
-        public string? RefreshToken { get; set; }
-
-        public DateTime? RefreshTokenExpiry { get; set; }
-
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+        public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
+        public ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
     }
 }
