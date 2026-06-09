@@ -3,15 +3,16 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import { TopNavbar } from "./TopNavbar";
 import { useAppStore } from "@/store/useAppStore";
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { getPendingCount } from "@/lib/adminService";
+import { useSignalR } from "@/hooks/useSignalR";
 
 export function AppLayout() {
+  useSignalR(); // establish real-time WebSocket connection
+
   const user = useAppStore((s) => s.user);
   const theme = useAppStore((s) => s.theme);
   const setPendingStudentCount = useAppStore((s) => s.setPendingStudentCount);
-  const addNotification = useAppStore((s) => s.addNotification);
-  const notified = useRef(false);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
@@ -22,15 +23,6 @@ export function AppLayout() {
     getPendingCount()
       .then((count) => {
         setPendingStudentCount(count);
-        if (count > 0 && !notified.current) {
-          notified.current = true;
-          addNotification({
-            title: "Pending student approvals",
-            message: `${count} student${count === 1 ? "" : "s"} waiting for approval.`,
-            type: "warning",
-            link: "/admin/pending",
-          });
-        }
       })
       .catch(() => {});
   }, [user?.role]);
