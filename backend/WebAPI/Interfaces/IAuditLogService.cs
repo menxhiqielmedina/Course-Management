@@ -6,5 +6,6 @@ namespace WebAPI.Interfaces
     {
         Task<List<AuditLogDto>> GetAllAsync(string? search);
         Task LogAsync(int? userId, string action, string entityType, string? entityId = null, string? details = null, string? ipAddress = null);
+        Task LogWithNameAsync(int? userId, string userName, string action, string entityType, string? entityId = null, string? details = null, string? ipAddress = null);
     }
 }

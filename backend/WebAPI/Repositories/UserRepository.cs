@@ -12,9 +12,6 @@ namespace WebAPI.Repositories
         public async Task<User?> FindByEmailAsync(string email) =>
             await _dbSet.FirstOrDefaultAsync(u => u.Email == email);
 
-        public async Task<User?> FindByRefreshTokenAsync(string hashedToken) =>
-            await _dbSet.FirstOrDefaultAsync(u => u.RefreshToken == hashedToken);
-
         public async Task<bool> ExistsByEmailAsync(string email, int? excludeId = null) =>
             await _dbSet.AnyAsync(u => u.Email == email && (excludeId == null || u.Id != excludeId.Value));
 
@@ -25,6 +22,12 @@ namespace WebAPI.Repositories
             await _dbSet
                 .Where(u => u.Role == "student" && u.Status == "pending")
                 .OrderBy(u => u.CreatedAt)
+                .ToListAsync();
+
+        public async Task<List<int>> GetAdminUserIdsAsync() =>
+            await _dbSet
+                .Where(u => u.Role == "admin")
+                .Select(u => u.Id)
                 .ToListAsync();
     }
 }

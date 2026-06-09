@@ -6,5 +6,7 @@ namespace WebAPI.Interfaces
     {
         Task<StudentProfileDto?> GetStudentAsync(int studentId);
         Task<ProfessorProfileDto?> GetProfessorAsync(int professorId);
+        Task<(UserProfileDto? profile, string? error)> UpdateMyProfileAsync(int userId, UpdateProfileDto dto);
+        Task<UserProfileDto?> GetMyProfileAsync(int userId);
     }
 }

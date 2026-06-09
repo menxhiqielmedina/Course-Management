@@ -10,15 +10,18 @@ namespace WebAPI.Services
         private readonly ICourseRepository _courseRepo;
         private readonly IStudentRepository _studentRepo;
         private readonly IProfessorRepository _professorRepo;
+        private readonly IGradeRepository _gradeRepo;
 
         public CourseService(
             ICourseRepository courseRepo,
             IStudentRepository studentRepo,
-            IProfessorRepository professorRepo)
+            IProfessorRepository professorRepo,
+            IGradeRepository gradeRepo)
         {
             _courseRepo = courseRepo;
             _studentRepo = studentRepo;
             _professorRepo = professorRepo;
+            _gradeRepo = gradeRepo;
         }
 
         public async Task<List<CourseResponseDto>> GetAllAsync(string? search, string? status, string? department, int? userId = null, string? role = null)
@@ -175,6 +178,14 @@ namespace WebAPI.Services
         {
             var course = await _courseRepo.GetByIdAsync(id);
             if (course == null) return false;
+
+            // Delete grades first (Restrict FK prevents cascade at DB level)
+            var grades = await _gradeRepo.GetByCourseIdAsync(id);
+            foreach (var g in grades)
+                _gradeRepo.Delete(g);
+            if (grades.Count > 0)
+                await _gradeRepo.SaveChangesAsync();
+
             _courseRepo.Delete(course);
             await _courseRepo.SaveChangesAsync();
             return true;

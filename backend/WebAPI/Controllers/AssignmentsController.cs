@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 using WebAPI.DTOs;
 using WebAPI.Interfaces;
+using WebAPI.Interfaces.Repositories;
 
 namespace WebAPI.Controllers
 {
@@ -12,10 +13,23 @@ namespace WebAPI.Controllers
     public class AssignmentsController : ControllerBase
     {
         private readonly IAssignmentService _service;
+        private readonly INotificationService _notifService;
+        private readonly ICourseRepository _courseRepo;
+        private readonly IStudentRepository _studentRepo;
+        private readonly IProfessorRepository _professorRepo;
 
-        public AssignmentsController(IAssignmentService service)
+        public AssignmentsController(
+            IAssignmentService service,
+            INotificationService notifService,
+            ICourseRepository courseRepo,
+            IStudentRepository studentRepo,
+            IProfessorRepository professorRepo)
         {
             _service = service;
+            _notifService = notifService;
+            _courseRepo = courseRepo;
+            _studentRepo = studentRepo;
+            _professorRepo = professorRepo;
         }
 
         private int GetUserId() => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -44,6 +58,22 @@ namespace WebAPI.Controllers
         {
             var (assignment, error) = await _service.CreateAsync(dto, GetUserId());
             if (assignment == null) return BadRequest(new { message = error });
+
+            // Notify all enrolled students about the new assignment
+            var enrollments = await _courseRepo.GetCourseStudentsAsync(assignment.CourseId);
+            var studentIds = enrollments.Select(e => e.StudentId).ToList();
+            var students = await _studentRepo.GetByIdsWithUserAsync(studentIds);
+            foreach (var student in students)
+            {
+                await _notifService.CreateAsync(new CreateNotificationDto
+                {
+                    UserId = student.UserId,
+                    Title = "New assignment posted",
+                    Message = $"A new assignment \"{assignment.Title}\" has been posted in {assignment.CourseCode}.",
+                    Type = "info"
+                });
+            }
+
             return CreatedAtAction(nameof(GetById), new { id = assignment.Id }, assignment);
         }
 
@@ -96,6 +126,22 @@ namespace WebAPI.Controllers
         {
             var (submission, error) = await _service.SubmitAsync(id, dto, GetUserId());
             if (submission == null) return BadRequest(new { message = error });
+
+            // Notify the professor who created the assignment
+            var assignment = await _service.GetByIdAsync(id);
+            if (assignment?.CreatedByUserId != null)
+            {
+                var student = await _studentRepo.GetByUserIdAsync(GetUserId());
+                var studentName = student?.FullName ?? "A student";
+                await _notifService.CreateAsync(new CreateNotificationDto
+                {
+                    UserId = assignment.CreatedByUserId,
+                    Title = "Assignment submitted",
+                    Message = $"{studentName} submitted \"{assignment.Title}\" in {assignment.CourseCode}.",
+                    Type = "success"
+                });
+            }
+
             return Ok(submission);
         }
 

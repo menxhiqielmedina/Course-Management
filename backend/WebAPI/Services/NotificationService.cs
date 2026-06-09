@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.SignalR;
 using WebAPI.DTOs;
+using WebAPI.Hubs;
 using WebAPI.Interfaces;
 using WebAPI.Interfaces.Repositories;
 using WebAPI.Models;
@@ -8,8 +10,13 @@ namespace WebAPI.Services
     public class NotificationService : INotificationService
     {
         private readonly INotificationRepository _notifRepo;
+        private readonly IHubContext<NotificationHub> _hub;
 
-        public NotificationService(INotificationRepository notifRepo) => _notifRepo = notifRepo;
+        public NotificationService(INotificationRepository notifRepo, IHubContext<NotificationHub> hub)
+        {
+            _notifRepo = notifRepo;
+            _hub = hub;
+        }
 
         public async Task<List<NotificationDto>> GetAllAsync()
         {
@@ -42,7 +49,14 @@ namespace WebAPI.Services
             };
             await _notifRepo.AddAsync(n);
             await _notifRepo.SaveChangesAsync();
-            return Map(n);
+
+            var mapped = Map(n);
+
+            // Push real-time to the target user via SignalR
+            await _hub.Clients.Group($"user-{dto.UserId}")
+                .SendAsync("ReceiveNotification", mapped);
+
+            return mapped;
         }
 
         public async Task<bool> MarkAsReadAsync(int id)

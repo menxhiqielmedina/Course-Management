@@ -10,6 +10,41 @@ namespace WebAPI.Services
         private readonly AppDbContext _context;
         public ProfileService(AppDbContext context) => _context = context;
 
+        public async Task<UserProfileDto?> GetMyProfileAsync(int userId)
+        {
+            var user = await _context.Users.FindAsync(userId);
+            if (user == null) return null;
+            return new UserProfileDto { Id = user.Id, FullName = user.FullName, Email = user.Email, Role = user.Role };
+        }
+
+        public async Task<(UserProfileDto? profile, string? error)> UpdateMyProfileAsync(int userId, UpdateProfileDto dto)
+        {
+            var user = await _context.Users.FindAsync(userId);
+            if (user == null) return (null, "User not found.");
+
+            var email = dto.Email.Trim().ToLower();
+            if (await _context.Users.AnyAsync(u => u.Email == email && u.Id != userId))
+                return (null, "Email is already in use.");
+
+            user.FullName = dto.FullName.Trim();
+            user.Email = email;
+
+            // Sync to Student or Professor table
+            if (user.Role == "student")
+            {
+                var student = await _context.Students.FirstOrDefaultAsync(s => s.UserId == userId);
+                if (student != null) { student.FullName = user.FullName; student.Email = user.Email; }
+            }
+            else if (user.Role == "professor")
+            {
+                var professor = await _context.Professors.FirstOrDefaultAsync(p => p.UserId == userId);
+                if (professor != null) { professor.FullName = user.FullName; professor.Email = user.Email; }
+            }
+
+            await _context.SaveChangesAsync();
+            return (new UserProfileDto { Id = user.Id, FullName = user.FullName, Email = user.Email, Role = user.Role }, null);
+        }
+
         public async Task<StudentProfileDto?> GetStudentAsync(int studentId)
         {
             var student = await _context.Students
