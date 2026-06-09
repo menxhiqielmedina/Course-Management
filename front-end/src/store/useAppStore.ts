@@ -41,10 +41,11 @@ interface AppState {
   files: FileItem[];
   auditLogs: AuditLog[];
 
-  // Notifications (real API)
+  // Notifications (real API + SignalR)
   notifications: NotificationItem[];
   setNotifications: (items: NotificationItem[]) => void;
   loadNotifications: () => Promise<void>;
+  addNotification: (item: NotificationItem) => void;
   markNotificationRead: (id: number) => void;
   markAllNotificationsRead: () => void;
   removeNotification: (id: number) => void;
@@ -117,9 +118,11 @@ export const useAppStore = create<AppState>()(
       files: mockFiles,
       auditLogs: mockAuditLogs,
 
-      // Notifications — real API
+      // Notifications — real API + SignalR
       notifications: [],
       setNotifications: (items) => set({ notifications: items }),
+      addNotification: (item) =>
+        set((s) => ({ notifications: [item, ...s.notifications] })),
       loadNotifications: async () => {
         try {
           const items = await getMyNotifications();
