@@ -1,5 +1,7 @@
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using WebAPI.DTOs;
+using WebAPI.Helpers;
 using WebAPI.Interfaces;
 using WebAPI.Interfaces.Repositories;
 using WebAPI.Models;
@@ -241,6 +243,58 @@ namespace WebAPI.Services
             _userRepo.Delete(professor.User);
             await _userRepo.SaveChangesAsync();
             return true;
+        }
+
+        public async Task<ImportResultDto> ImportStudentsAsync(IFormFile file)
+        {
+            var (rows, parseError) = await ImportParser.ParseAsync(file);
+            var result = new ImportResultDto();
+            if (parseError != null) { result.Errors.Add(parseError); return result; }
+
+            foreach (var row in rows)
+            {
+                var fullName = ImportParser.Get(row, "FullName", "Name", "fullname", "name");
+                var email = ImportParser.Get(row, "Email", "email").ToLower();
+                var password = ImportParser.Get(row, "Password", "password");
+                var department = ImportParser.Get(row, "Department", "department");
+
+                if (string.IsNullOrWhiteSpace(fullName) || string.IsNullOrWhiteSpace(email))
+                { result.Errors.Add($"Row skipped — missing Name or Email"); result.Skipped++; continue; }
+
+                if (password.Length < 6) password = "Welcome@123";
+
+                var dto = new AddStudentDto { FullName = fullName, Email = email, Password = password, Department = department };
+                var student = await AddStudentAsync(dto);
+                if (student == null) { result.Errors.Add($"Skipped '{email}' — already exists"); result.Skipped++; }
+                else result.Imported++;
+            }
+            return result;
+        }
+
+        public async Task<ImportResultDto> ImportProfessorsAsync(IFormFile file)
+        {
+            var (rows, parseError) = await ImportParser.ParseAsync(file);
+            var result = new ImportResultDto();
+            if (parseError != null) { result.Errors.Add(parseError); return result; }
+
+            foreach (var row in rows)
+            {
+                var fullName = ImportParser.Get(row, "FullName", "Name", "fullname", "name");
+                var email = ImportParser.Get(row, "Email", "email").ToLower();
+                var password = ImportParser.Get(row, "Password", "password");
+                var department = ImportParser.Get(row, "Department", "department");
+
+                if (string.IsNullOrWhiteSpace(fullName) || string.IsNullOrWhiteSpace(email))
+                { result.Errors.Add("Row skipped — missing Name or Email"); result.Skipped++; continue; }
+
+                if (password.Length < 6) password = "Welcome@123";
+
+                var dto = new AddProfessorDto { FullName = fullName, Email = email, Password = password, Department = department };
+                var professor = await AddProfessorAsync(dto);
+                if (professor == null) { result.Errors.Add($"Skipped '{email}' — already exists"); result.Skipped++; }
+                else result.Imported++;
+            }
+            return result;
         }
     }
 }

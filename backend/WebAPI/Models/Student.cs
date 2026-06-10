@@ -21,5 +21,11 @@ namespace WebAPI.Models
         public string Department { get; set; } = string.Empty;
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        public DateTime? UpdatedAt { get; set; }
+
+        public int? CreatedByUserId { get; set; }
+
+        public int? UpdatedByUserId { get; set; }
     }
 }

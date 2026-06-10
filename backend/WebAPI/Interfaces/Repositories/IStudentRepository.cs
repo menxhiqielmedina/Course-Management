@@ -5,6 +5,7 @@ namespace WebAPI.Interfaces.Repositories
     public interface IStudentRepository : IRepository<Student>
     {
         Task<Student?> GetByUserIdAsync(int userId);
+        Task<Student?> GetByEmailAsync(string email);
         Task<List<Student>> GetAllWithUserAsync();
         Task<Student?> GetWithUserAsync(int id);
         Task<List<int>> GetCourseIdsAsync(int studentId);

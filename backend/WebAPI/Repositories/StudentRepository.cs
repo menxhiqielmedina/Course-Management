@@ -35,5 +35,8 @@ namespace WebAPI.Repositories
                 .Where(s => ids.Contains(s.Id))
                 .OrderBy(s => s.FullName)
                 .ToListAsync();
+
+        public async Task<Student?> GetByEmailAsync(string email) =>
+            await _dbSet.FirstOrDefaultAsync(s => s.Email.ToLower() == email.ToLower());
     }
 }

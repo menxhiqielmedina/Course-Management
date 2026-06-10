@@ -7,6 +7,7 @@ namespace WebAPI.Interfaces.Repositories
         Task<Course?> GetWithDetailsAsync(int id);
         Task<List<Course>> GetAllWithDetailsAsync(string? search, string? status, string? department, int? professorId = null, IEnumerable<int>? studentCourseIds = null);
         Task<bool> ExistsByCodeAndSemesterAsync(string code, string semester, int? excludeId = null);
+        Task<Course?> GetByCodeAsync(string code);
         Task<List<Course>> GetEnrolledCoursesAsync(int studentId);
 
         // CourseStudent operations

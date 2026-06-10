@@ -11,8 +11,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
 import { useAppStore } from "@/store/useAppStore";
-import { getProfessors, addProfessor, updateProfessor, deleteProfessor, type Professor } from "@/lib/adminService";
+import { getProfessors, addProfessor, updateProfessor, deleteProfessor, importProfessors, type Professor } from "@/lib/adminService";
 import { useDepartments } from "@/hooks/use-config";
+import { ExportImportBar } from "@/components/shared/ExportImportBar";
+import { exportToCSV, exportToExcel, exportToJSON } from "@/lib/exportUtils";
 
 const Professors = () => {
   const role = useAppStore((s) => s.user?.role);
@@ -21,6 +23,7 @@ const Professors = () => {
   const [professors, setProfessors] = useState<Professor[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [deptFilter, setDeptFilter] = useState("all");
 
   // Add state
   const [addOpen, setAddOpen] = useState(false);
@@ -63,10 +66,12 @@ const Professors = () => {
   };
 
   const filtered = useMemo(
-    () => professors.filter((p) =>
-      `${p.fullName} ${p.email}`.toLowerCase().includes(search.toLowerCase())
-    ),
-    [professors, search]
+    () => professors.filter((p) => {
+      const matchSearch = `${p.fullName} ${p.email}`.toLowerCase().includes(search.toLowerCase());
+      const matchDept = deptFilter === "all" || p.department === deptFilter;
+      return matchSearch && matchDept;
+    }),
+    [professors, search, deptFilter]
   );
 
   // Add professor
@@ -146,16 +151,32 @@ const Professors = () => {
   return (
     <div className="space-y-6">
       <PageHeader title="Professors" description={`${filtered.length} faculty members`}>
-        {isAdmin && (
-          <Button onClick={() => setAddOpen(true)} className="gap-2">
-            <UserPlus className="h-4 w-4" /> Add Professor
-          </Button>
-        )}
+        <div className="flex gap-2">
+          {isAdmin && (
+            <ExportImportBar
+              onExportCSV={() => exportToCSV(filtered.map((p) => ({ Name: p.fullName, Email: p.email, Department: p.department, Added: p.createdAt })), "professors.csv")}
+              onExportExcel={() => exportToExcel(filtered.map((p) => ({ Name: p.fullName, Email: p.email, Department: p.department, Added: p.createdAt })), "professors.xlsx")}
+              onExportJSON={() => exportToJSON(filtered.map((p) => ({ Name: p.fullName, Email: p.email, Department: p.department, Added: p.createdAt })), "professors.json")}
+              onImport={async (file) => {
+                try {
+                  const result = await importProfessors(file);
+                  toast({ title: `Imported ${result.imported} professors`, description: result.errors.length ? result.errors.slice(0, 3).join("; ") : undefined });
+                  fetchProfessors();
+                } catch { toast({ title: "Import failed", variant: "destructive" }); }
+              }}
+            />
+          )}
+          {isAdmin && (
+            <Button onClick={() => setAddOpen(true)} className="gap-2">
+              <UserPlus className="h-4 w-4" /> Add Professor
+            </Button>
+          )}
+        </div>
       </PageHeader>
 
       <Card>
-        <CardContent className="p-4">
-          <div className="relative">
+        <CardContent className="p-4 flex flex-col md:flex-row gap-3">
+          <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={search}
@@ -164,6 +185,13 @@ const Professors = () => {
               className="pl-9"
             />
           </div>
+          <Select value={deptFilter} onValueChange={setDeptFilter}>
+            <SelectTrigger className="w-full md:w-48"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All departments</SelectItem>
+              {departments.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </CardContent>
       </Card>
 

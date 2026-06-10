@@ -46,7 +46,8 @@ api.interceptors.response.use(
     const original = error.config;
 
     // Only intercept 401s once per request (prevent infinite loops).
-    if (error.response?.status !== 401 || original._retry) {
+    // Skip auth endpoints — a 401 from /auth/login should surface as-is, not trigger a refresh.
+    if (error.response?.status !== 401 || original._retry || original.url?.includes("/auth/")) {
       return Promise.reject(error);
     }
     original._retry = true;

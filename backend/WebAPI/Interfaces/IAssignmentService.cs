@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http;
 using WebAPI.DTOs;
 
 namespace WebAPI.Interfaces
@@ -19,5 +20,6 @@ namespace WebAPI.Interfaces
         Task<List<SubmissionWithAssignmentDto>> GetAllSubmissionsAsync(int userId, string role);
         Task<(string? storedFileName, string? originalFileName, string? error)> UploadAttachmentAsync(IFormFile file);
         (byte[]? data, string contentType, string fileName)? GetAttachment(string storedFileName);
+        Task<ImportResultDto> ImportAsync(IFormFile file, int userId);
     }
 }

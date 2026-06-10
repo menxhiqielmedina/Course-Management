@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Plus, FileText, Calendar, Eye, Loader2, Trash2, Edit, CheckCircle, Search, Paperclip, X } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -26,9 +26,12 @@ import {
   submitAssignmentApi, getMySubmissionApi, gradeSubmissionApi,
   getStudentAssignmentsApi, getAllSubmissionsForProfessorApi,
   uploadSubmissionAttachmentApi, parseAttachmentUrl, getAttachmentDownloadUrl,
+  importAssignmentsApi,
   type AssignmentResponse, type SubmissionResponse, type StudentAssignment,
   type SubmissionWithAssignment,
 } from "@/lib/assignmentService";
+import { ExportImportBar } from "@/components/shared/ExportImportBar";
+import { exportToCSV, exportToExcel, exportToJSON } from "@/lib/exportUtils";
 import { getCoursesApi, type CourseResponse } from "@/lib/courseService";
 
 const statusVariant = (s: string) =>
@@ -78,6 +81,20 @@ const Assignments = () => {
   const [allSubmissionsLoaded, setAllSubmissionsLoaded] = useState(false);
   const [allSubmissionsLoading, setAllSubmissionsLoading] = useState(false);
   const [submissionsSearch, setSubmissionsSearch] = useState("");
+
+  // Main list search/filter (admin / professor)
+  const [assignmentSearch, setAssignmentSearch] = useState("");
+  const [assignmentCourseFilter, setAssignmentCourseFilter] = useState("all");
+
+  const filteredAssignments = useMemo(() =>
+    assignments.filter((a) => {
+      const q = assignmentSearch.toLowerCase();
+      const matchSearch = !q || a.title.toLowerCase().includes(q) || a.courseCode.toLowerCase().includes(q);
+      const matchCourse = assignmentCourseFilter === "all" || String(a.courseId) === assignmentCourseFilter;
+      return matchSearch && matchCourse;
+    }),
+    [assignments, assignmentSearch, assignmentCourseFilter]
+  );
   const [submissionsFilter, setSubmissionsFilter] = useState<"all" | "ungraded" | "graded">("all");
 
   // Submit dialog (student)
@@ -403,11 +420,28 @@ const Assignments = () => {
         title="Assignments"
         description={isStudent ? `${studentAssignments.length} assignments` : `${assignments.length} assignments total`}
       >
-        {canManage && (
-          <Button size="sm" className="gradient-primary text-primary-foreground" onClick={() => openForm()}>
-            <Plus className="h-4 w-4 mr-1" /> New assignment
-          </Button>
-        )}
+        <div className="flex gap-2">
+          {canManage && (
+            <ExportImportBar
+              onExportCSV={() => exportToCSV(filteredAssignments.map((a) => ({ Title: a.title, Course: a.courseCode, DueDate: a.dueDate, Points: a.totalPoints, Status: a.status })), "assignments.csv")}
+              onExportExcel={() => exportToExcel(filteredAssignments.map((a) => ({ Title: a.title, Course: a.courseCode, DueDate: a.dueDate, Points: a.totalPoints, Status: a.status })), "assignments.xlsx")}
+              onExportJSON={() => exportToJSON(filteredAssignments.map((a) => ({ Title: a.title, Course: a.courseCode, DueDate: a.dueDate, Points: a.totalPoints, Status: a.status })), "assignments.json")}
+              onImport={async (file) => {
+                try {
+                  const result = await importAssignmentsApi(file);
+                  toast({ title: `Imported ${result.imported} assignments`, description: result.errors.length ? result.errors.slice(0, 3).join("; ") : undefined });
+                  const [a, c] = await Promise.all([getAssignmentsApi(), getCoursesApi()]);
+                  setAssignments(a); setCourses(c);
+                } catch { toast({ title: "Import failed", variant: "destructive" }); }
+              }}
+            />
+          )}
+          {canManage && (
+            <Button size="sm" className="gradient-primary text-primary-foreground" onClick={() => openForm()}>
+              <Plus className="h-4 w-4 mr-1" /> New assignment
+            </Button>
+          )}
+        </div>
       </PageHeader>
 
       {isStudent ? (
@@ -492,17 +526,38 @@ const Assignments = () => {
       ) : (
         // Admin / Professor view
         <Tabs defaultValue="all">
+          {/* Search / filter bar */}
+          <div className="flex flex-col sm:flex-row gap-3 mb-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search by title or course…"
+                className="pl-9"
+                value={assignmentSearch}
+                onChange={(e) => setAssignmentSearch(e.target.value)}
+              />
+            </div>
+            <Select value={assignmentCourseFilter} onValueChange={setAssignmentCourseFilter}>
+              <SelectTrigger className="w-full sm:w-52"><SelectValue placeholder="All courses" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All courses</SelectItem>
+                {courses.map((c) => (
+                  <SelectItem key={c.id} value={String(c.id)}>{c.code} — {c.title}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <TabsList>
-            <TabsTrigger value="all">All ({assignments.length})</TabsTrigger>
-            <TabsTrigger value="open">Open ({assignments.filter((a) => a.status === "open").length})</TabsTrigger>
-            <TabsTrigger value="closed">Closed ({assignments.filter((a) => a.status === "closed").length})</TabsTrigger>
-            <TabsTrigger value="draft">Draft ({assignments.filter((a) => a.status === "draft").length})</TabsTrigger>
+            <TabsTrigger value="all">All ({filteredAssignments.length})</TabsTrigger>
+            <TabsTrigger value="open">Open ({filteredAssignments.filter((a) => a.status === "open").length})</TabsTrigger>
+            <TabsTrigger value="closed">Closed ({filteredAssignments.filter((a) => a.status === "closed").length})</TabsTrigger>
+            <TabsTrigger value="draft">Draft ({filteredAssignments.filter((a) => a.status === "draft").length})</TabsTrigger>
             <TabsTrigger value="submissions" onClick={loadAllSubmissions}>Submissions</TabsTrigger>
           </TabsList>
-          <TabsContent value="all" className="mt-4">{renderList(assignments)}</TabsContent>
-          <TabsContent value="open" className="mt-4">{renderList(assignments.filter((a) => a.status === "open"))}</TabsContent>
-          <TabsContent value="closed" className="mt-4">{renderList(assignments.filter((a) => a.status === "closed"))}</TabsContent>
-          <TabsContent value="draft" className="mt-4">{renderList(assignments.filter((a) => a.status === "draft"))}</TabsContent>
+          <TabsContent value="all" className="mt-4">{renderList(filteredAssignments)}</TabsContent>
+          <TabsContent value="open" className="mt-4">{renderList(filteredAssignments.filter((a) => a.status === "open"))}</TabsContent>
+          <TabsContent value="closed" className="mt-4">{renderList(filteredAssignments.filter((a) => a.status === "closed"))}</TabsContent>
+          <TabsContent value="draft" className="mt-4">{renderList(filteredAssignments.filter((a) => a.status === "draft"))}</TabsContent>
 
           <TabsContent value="submissions" className="mt-4 space-y-4">
             {/* Search + status filter */}

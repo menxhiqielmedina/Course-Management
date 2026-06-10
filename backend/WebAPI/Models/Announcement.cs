@@ -22,6 +22,8 @@ namespace WebAPI.Models
         public bool IsGlobal { get; set; } = false;
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime? UpdatedAt { get; set; }
+        public int? UpdatedByUserId { get; set; }
 
         public DateTime? ExpiresAt { get; set; }
     }

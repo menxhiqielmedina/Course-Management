@@ -181,6 +181,16 @@ namespace WebAPI.Controllers
             return Ok(new { storedFileName, originalFileName });
         }
 
+        [HttpPost("import")]
+        [Authorize(Roles = "admin,professor")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> Import(IFormFile file)
+        {
+            if (file == null || file.Length == 0) return BadRequest(new { message = "No file provided." });
+            var result = await _service.ImportAsync(file, GetUserId());
+            return Ok(result);
+        }
+
         [HttpGet("attachment/{storedFileName}")]
         public IActionResult GetAttachment(string storedFileName)
         {

@@ -10,7 +10,7 @@ export function useSignalR() {
   const started = useRef(false);
 
   useEffect(() => {
-    if (!token  !user  started.current) return;
+    if (!token || !user || started.current) return;
 
     started.current = true;
 

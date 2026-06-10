@@ -32,6 +32,10 @@ namespace WebAPI.Models
 
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
+        public int? CreatedByUserId { get; set; }
+
+        public int? UpdatedByUserId { get; set; }
+
         public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
         public ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
     }

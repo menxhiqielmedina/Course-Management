@@ -81,5 +81,8 @@ namespace WebAPI.Repositories
 
         public void RemoveEnrollment(CourseStudent enrollment) =>
             _context.CourseStudents.Remove(enrollment);
+
+        public async Task<Course?> GetByCodeAsync(string code) =>
+            await _context.Courses.FirstOrDefaultAsync(c => c.Code == code);
     }
 }

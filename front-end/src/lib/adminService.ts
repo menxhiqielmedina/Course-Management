@@ -67,3 +67,17 @@ export const deleteStudent = (id: number): Promise<void> =>
 
 export const deleteProfessor = (id: number): Promise<void> =>
   api.delete(`/admin/professors/${id}`);
+
+export interface ImportResult { imported: number; skipped: number; errors: string[] }
+
+function buildFormData(file: File) {
+  const fd = new FormData();
+  fd.append("file", file);
+  return fd;
+}
+
+export const importStudents = (file: File): Promise<ImportResult> =>
+  api.post("/admin/students/import", buildFormData(file), { headers: { "Content-Type": "multipart/form-data" } }).then((r) => r.data);
+
+export const importProfessors = (file: File): Promise<ImportResult> =>
+  api.post("/admin/professors/import", buildFormData(file), { headers: { "Content-Type": "multipart/form-data" } }).then((r) => r.data);

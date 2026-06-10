@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,13 +9,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Loader2, GraduationCap, BookOpen, Pencil } from "lucide-react";
+import { Loader2, GraduationCap, BookOpen, Pencil, Search } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useAppStore } from "@/store/useAppStore";
 import {
-  getCourseGradesApi, getMyGradesApi, upsertGradeApi,
+  getCourseGradesApi, getMyGradesApi, upsertGradeApi, importGradesApi,
   type CourseStudentGrade, type GradeResponse,
 } from "@/lib/gradeService";
+import { ExportImportBar } from "@/components/shared/ExportImportBar";
+import { exportToCSV, exportToExcel, exportToJSON } from "@/lib/exportUtils";
 import { getCoursesApi, type CourseResponse } from "@/lib/courseService";
 
 const letterColor = (l: string | null) => {
@@ -42,6 +44,15 @@ const Grades = () => {
   const [myGrades, setMyGrades] = useState<GradeResponse[]>([]);
 
   const [loading, setLoading] = useState(true);
+
+  const [gradesSearch, setGradesSearch] = useState("");
+
+  const filteredCourseStudents = useMemo(() => {
+    const q = gradesSearch.toLowerCase();
+    return !q ? courseStudents : courseStudents.filter((s) =>
+      s.studentName.toLowerCase().includes(q) || s.studentEmail.toLowerCase().includes(q)
+    );
+  }, [courseStudents, gradesSearch]);
 
   // grade dialog
   const [gradeOpen, setGradeOpen] = useState(false);
@@ -188,7 +199,20 @@ const Grades = () => {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Grades" description="Assign final grades to students per course" />
+      <PageHeader title="Grades" description="Assign final grades to students per course">
+        <ExportImportBar
+          onExportCSV={() => exportToCSV(filteredCourseStudents.map((s) => ({ Student: s.studentName, Email: s.studentEmail, Grade: s.gradeValue ?? "", Letter: s.letterGrade ?? "", Comments: s.comments ?? "", GradedBy: s.gradedByName ?? "" })), "grades.csv")}
+          onExportExcel={() => exportToExcel(filteredCourseStudents.map((s) => ({ Student: s.studentName, Email: s.studentEmail, Grade: s.gradeValue ?? "", Letter: s.letterGrade ?? "", Comments: s.comments ?? "", GradedBy: s.gradedByName ?? "" })), "grades.xlsx")}
+          onExportJSON={() => exportToJSON(filteredCourseStudents.map((s) => ({ Student: s.studentName, Email: s.studentEmail, Grade: s.gradeValue ?? "", Letter: s.letterGrade ?? "", Comments: s.comments ?? "" })), "grades.json")}
+          onImport={async (file) => {
+            try {
+              const result = await importGradesApi(file);
+              toast({ title: `Imported ${result.imported} grades`, description: result.errors.length ? result.errors.slice(0, 3).join("; ") : undefined });
+              if (selectedCourseId) { const data = await getCourseGradesApi(selectedCourseId); setCourseStudents(data); }
+            } catch { toast({ title: "Import failed", variant: "destructive" }); }
+          }}
+        />
+      </PageHeader>
 
       <div className="flex items-center gap-3">
         <BookOpen className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -235,6 +259,20 @@ const Grades = () => {
       )}
 
       {courseStudents.length > 0 && !studentsLoading && (
+        <>
+          <div className="relative max-w-xs">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search student…"
+              className="pl-9"
+              value={gradesSearch}
+              onChange={(e) => setGradesSearch(e.target.value)}
+            />
+          </div>
+        </>
+      )}
+
+      {courseStudents.length > 0 && !studentsLoading && (
         <Card>
           <CardContent className="p-0">
             <Table>
@@ -250,7 +288,7 @@ const Grades = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {courseStudents.map((s) => (
+                {filteredCourseStudents.map((s) => (
                   <TableRow key={s.studentId}>
                     <TableCell>
                       <div className="font-medium">{s.studentName}</div>

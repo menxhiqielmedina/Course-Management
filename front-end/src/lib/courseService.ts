@@ -89,3 +89,12 @@ export async function getEnrolledCoursesApi(): Promise<CourseResponse[]> {
   const { data } = await api.get<CourseResponse[]>("/courses/enrolled");
   return data;
 }
+
+export interface ImportResult { imported: number; skipped: number; errors: string[] }
+
+export async function importCoursesApi(file: File): Promise<ImportResult> {
+  const fd = new FormData();
+  fd.append("file", file);
+  const { data } = await api.post<ImportResult>("/courses/import", fd, { headers: { "Content-Type": "multipart/form-data" } });
+  return data;
+}

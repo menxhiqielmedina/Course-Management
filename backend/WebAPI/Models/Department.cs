@@ -19,5 +19,11 @@ namespace WebAPI.Models
         public bool IsActive { get; set; } = true;
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        public DateTime? UpdatedAt { get; set; }
+
+        public int? CreatedByUserId { get; set; }
+
+        public int? UpdatedByUserId { get; set; }
     }
 }

@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Http;
 using WebAPI.DTOs;
+using WebAPI.Helpers;
 using WebAPI.Interfaces;
 using WebAPI.Interfaces.Repositories;
 using WebAPI.Models;
@@ -208,6 +210,42 @@ namespace WebAPI.Services
 
             var courses = await _courseRepo.GetEnrolledCoursesAsync(student.Id);
             return courses.Select(MapToDto).ToList();
+        }
+
+        public async Task<ImportResultDto> ImportAsync(IFormFile file)
+        {
+            var (rows, parseError) = await ImportParser.ParseAsync(file);
+            var result = new ImportResultDto();
+            if (parseError != null) { result.Errors.Add(parseError); return result; }
+
+            foreach (var row in rows)
+            {
+                var code = ImportParser.Get(row, "Code", "code");
+                var title = ImportParser.Get(row, "Title", "title");
+                var department = ImportParser.Get(row, "Department", "department");
+                var semester = ImportParser.Get(row, "Semester", "semester");
+                var creditsStr = ImportParser.Get(row, "Credits", "credits");
+                var capacityStr = ImportParser.Get(row, "Capacity", "capacity");
+                var status = ImportParser.Get(row, "Status", "status");
+
+                if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(title))
+                { result.Errors.Add("Row skipped — missing Code or Title"); result.Skipped++; continue; }
+
+                var dto = new CreateCourseDto
+                {
+                    Code = code, Title = title, Department = department,
+                    Semester = string.IsNullOrWhiteSpace(semester) ? "Fall 2025" : semester,
+                    Credits = int.TryParse(creditsStr, out var cr) ? cr : 3,
+                    Capacity = int.TryParse(capacityStr, out var cap) ? cap : 30,
+                    Status = new[] { "draft", "active", "archived" }.Contains(status) ? status : "draft",
+                    Description = ImportParser.Get(row, "Description", "description"),
+                };
+
+                var (course, error) = await CreateAsync(dto);
+                if (course == null) { result.Errors.Add($"Skipped '{code}' — {error}"); result.Skipped++; }
+                else result.Imported++;
+            }
+            return result;
         }
 
         private static CourseResponseDto MapToDto(Course c) => new()

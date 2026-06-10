@@ -116,5 +116,15 @@ namespace WebAPI.Controllers
             if (!success) return NotFound(new { message = "Enrollment not found." });
             return Ok(new { message = "Student removed." });
         }
+
+        [HttpPost("import")]
+        [Authorize(Roles = "admin")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> Import(IFormFile file)
+        {
+            if (file == null || file.Length == 0) return BadRequest(new { message = "No file provided." });
+            var result = await _courseService.ImportAsync(file);
+            return Ok(result);
+        }
     }
 }

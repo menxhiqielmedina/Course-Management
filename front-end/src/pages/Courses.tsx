@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, Search, Edit, BookOpen, Loader2, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -11,10 +11,15 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { useAppStore } from "@/store/useAppStore";
-import { CourseFormDialog } from "@/components/courses/CourseFormDialog";
+
+const CourseFormDialog = lazy(() =>
+  import("@/components/courses/CourseFormDialog").then((m) => ({ default: m.CourseFormDialog }))
+);
 import { toast } from "@/hooks/use-toast";
 import { useDepartments } from "@/hooks/use-config";
-import { getCoursesApi, updateCourseStatusApi, deleteCourseApi, type CourseResponse } from "@/lib/courseService";
+import { getCoursesApi, updateCourseStatusApi, deleteCourseApi, importCoursesApi, type CourseResponse } from "@/lib/courseService";
+import { ExportImportBar } from "@/components/shared/ExportImportBar";
+import { exportToCSV, exportToExcel, exportToJSON } from "@/lib/exportUtils";
 
 const COURSE_COLORS = [
   "230 75% 56%", "160 60% 45%", "280 65% 55%",
@@ -102,11 +107,27 @@ const Courses = () => {
   return (
     <div className="space-y-6">
       <PageHeader title="Courses" description={`${filtered.length} courses in catalog`}>
-        {isAdmin && (
-          <Button size="sm" className="gradient-primary text-primary-foreground" onClick={() => { setEditing(null); setOpen(true); }}>
-            <Plus className="h-4 w-4 mr-1" /> New course
-          </Button>
-        )}
+        <div className="flex gap-2">
+          {isAdmin && (
+            <ExportImportBar
+              onExportCSV={() => exportToCSV(filtered.map((c) => ({ Code: c.code, Title: c.title, Department: c.department, Credits: c.credits, Semester: c.semester, Status: c.status, Professor: c.professorName ?? "", Enrolled: c.enrolledCount })), "courses.csv")}
+              onExportExcel={() => exportToExcel(filtered.map((c) => ({ Code: c.code, Title: c.title, Department: c.department, Credits: c.credits, Semester: c.semester, Status: c.status, Professor: c.professorName ?? "", Enrolled: c.enrolledCount })), "courses.xlsx")}
+              onExportJSON={() => exportToJSON(filtered.map((c) => ({ Code: c.code, Title: c.title, Department: c.department, Credits: c.credits, Semester: c.semester, Status: c.status, Professor: c.professorName ?? "", Enrolled: c.enrolledCount })), "courses.json")}
+              onImport={async (file) => {
+                try {
+                  const result = await importCoursesApi(file);
+                  toast({ title: `Imported ${result.imported} courses`, description: result.errors.length ? result.errors.slice(0, 3).join("; ") : undefined });
+                  loadCourses();
+                } catch { toast({ title: "Import failed", variant: "destructive" }); }
+              }}
+            />
+          )}
+          {isAdmin && (
+            <Button size="sm" className="gradient-primary text-primary-foreground" onClick={() => { setEditing(null); setOpen(true); }}>
+              <Plus className="h-4 w-4 mr-1" /> New course
+            </Button>
+          )}
+        </div>
       </PageHeader>
 
       <Card>
@@ -182,7 +203,9 @@ const Courses = () => {
         </div>
       )}
 
-      <CourseFormDialog open={open} onOpenChange={setOpen} course={editing} onSaved={handleSaved} />
+      <Suspense fallback={null}>
+        <CourseFormDialog open={open} onOpenChange={setOpen} course={editing} onSaved={handleSaved} />
+      </Suspense>
     </div>
   );
 };

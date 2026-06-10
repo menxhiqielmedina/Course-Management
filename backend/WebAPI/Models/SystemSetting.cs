@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace WebAPI.Models
 {
     public class SystemSetting
@@ -14,6 +16,10 @@ namespace WebAPI.Models
         [MaxLength(300)]
         public string? Description { get; set; }
 
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public int? CreatedByUserId { get; set; }
+
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+        public int? UpdatedByUserId { get; set; }
     }
 }

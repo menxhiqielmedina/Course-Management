@@ -11,5 +11,10 @@ namespace WebAPI.Models
         public Role Role { get; set; } = null!;
 
         public DateTime AssignedAt { get; set; } = DateTime.UtcNow;
+
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime? UpdatedAt { get; set; }
+        public int? CreatedByUserId { get; set; }
+        public int? UpdatedByUserId { get; set; }
     }
 }

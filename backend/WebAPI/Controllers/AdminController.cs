@@ -203,5 +203,25 @@ namespace WebAPI.Controllers
             if (!success) return NotFound(new { message = "Professor not found." });
             return Ok(new { message = "Professor deleted." });
         }
+
+        [HttpPost("students/import")]
+        [Authorize(Roles = "admin")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> ImportStudents(IFormFile file)
+        {
+            if (file == null || file.Length == 0) return BadRequest(new { message = "No file provided." });
+            var result = await _adminService.ImportStudentsAsync(file);
+            return Ok(result);
+        }
+
+        [HttpPost("professors/import")]
+        [Authorize(Roles = "admin")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> ImportProfessors(IFormFile file)
+        {
+            if (file == null || file.Length == 0) return BadRequest(new { message = "No file provided." });
+            var result = await _adminService.ImportProfessorsAsync(file);
+            return Ok(result);
+        }
     }
 }

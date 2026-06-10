@@ -1,6 +1,8 @@
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using WebAPI.Data;
 using WebAPI.DTOs;
+using WebAPI.Helpers;
 using WebAPI.Interfaces;
 using WebAPI.Models;
 
@@ -447,5 +449,42 @@ namespace WebAPI.Services
             GradedAt = s.GradedAt,
             GradedByName = s.GradedBy?.FullName
         };
+
+        public async Task<ImportResultDto> ImportAsync(IFormFile file, int userId)
+        {
+            var (rows, parseError) = await ImportParser.ParseAsync(file);
+            var result = new ImportResultDto();
+            if (parseError != null) { result.Errors.Add(parseError); return result; }
+
+            foreach (var row in rows)
+            {
+                var title = ImportParser.Get(row, "Title", "title");
+                var courseCode = ImportParser.Get(row, "CourseCode", "Course", "course", "coursecode");
+                var dueDateStr = ImportParser.Get(row, "DueDate", "duedate", "due_date");
+                var pointsStr = ImportParser.Get(row, "TotalPoints", "Points", "points", "totalpoints");
+                var status = ImportParser.Get(row, "Status", "status");
+                var description = ImportParser.Get(row, "Description", "description");
+
+                if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(courseCode))
+                { result.Errors.Add("Row skipped — missing Title or CourseCode"); result.Skipped++; continue; }
+
+                var course = await _context.Courses.FirstOrDefaultAsync(c => c.Code == courseCode);
+                if (course == null) { result.Errors.Add($"Skipped '{title}' — course '{courseCode}' not found"); result.Skipped++; continue; }
+
+                if (!DateTime.TryParse(dueDateStr, out var dueDate)) dueDate = DateTime.UtcNow.AddDays(14);
+
+                var dto = new CreateAssignmentDto
+                {
+                    CourseId = course.Id, Title = title, Description = description,
+                    DueDate = dueDate, TotalPoints = int.TryParse(pointsStr, out var pts) ? pts : 100,
+                    Status = new[] { "draft", "open", "closed" }.Contains(status) ? status : "draft",
+                };
+
+                var (assignment, error) = await CreateAsync(dto, userId);
+                if (assignment == null) { result.Errors.Add($"Skipped '{title}' — {error}"); result.Skipped++; }
+                else result.Imported++;
+            }
+            return result;
+        }
     }
 }

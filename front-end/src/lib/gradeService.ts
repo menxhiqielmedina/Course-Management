@@ -46,3 +46,11 @@ export const upsertGradeApi = (dto: UpsertGradeDto): Promise<GradeResponse> =>
 
 export const deleteGradeApi = (id: number): Promise<void> =>
   api.delete(`/grades/${id}`).then((r) => r.data);
+
+export interface ImportResult { imported: number; skipped: number; errors: string[] }
+
+export const importGradesApi = (file: File): Promise<ImportResult> => {
+  const fd = new FormData();
+  fd.append("file", file);
+  return api.post("/grades/import", fd, { headers: { "Content-Type": "multipart/form-data" } }).then((r) => r.data);
+};

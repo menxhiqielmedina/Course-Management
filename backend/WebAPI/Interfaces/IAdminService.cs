@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http;
 using WebAPI.DTOs;
 
 namespace WebAPI.Interfaces
@@ -17,5 +18,7 @@ namespace WebAPI.Interfaces
         Task<bool> UpdateProfessorAsync(int id, UpdateUserDto dto);
         Task<bool> DeleteStudentAsync(int id);
         Task<bool> DeleteProfessorAsync(int id);
+        Task<ImportResultDto> ImportStudentsAsync(IFormFile file);
+        Task<ImportResultDto> ImportProfessorsAsync(IFormFile file);
     }
 }

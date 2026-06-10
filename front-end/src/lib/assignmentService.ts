@@ -163,3 +163,12 @@ export async function gradeSubmissionApi(assignmentId: number, submissionId: num
   const { data } = await api.put<SubmissionResponse>(`/assignments/${assignmentId}/submissions/${submissionId}/grade`, { gradePoints, feedback });
   return data;
 }
+
+export interface ImportResult { imported: number; skipped: number; errors: string[] }
+
+export async function importAssignmentsApi(file: File): Promise<ImportResult> {
+  const fd = new FormData();
+  fd.append("file", file);
+  const { data } = await api.post<ImportResult>("/assignments/import", fd, { headers: { "Content-Type": "multipart/form-data" } });
+  return data;
+}

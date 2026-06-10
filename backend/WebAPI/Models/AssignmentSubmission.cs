@@ -34,5 +34,10 @@ namespace WebAPI.Models
 
         public int? GradedByUserId { get; set; }
         public User? GradedBy { get; set; }
+
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime? UpdatedAt { get; set; }
+        public int? CreatedByUserId { get; set; }
+        public int? UpdatedByUserId { get; set; }
     }
 }

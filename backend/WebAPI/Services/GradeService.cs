@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Http;
 using WebAPI.DTOs;
+using WebAPI.Helpers;
 using WebAPI.Interfaces;
 using WebAPI.Interfaces.Repositories;
 using WebAPI.Models;
@@ -107,6 +109,39 @@ namespace WebAPI.Services
             _gradeRepo.Delete(grade);
             await _gradeRepo.SaveChangesAsync();
             return true;
+        }
+
+        public async Task<ImportResultDto> ImportAsync(IFormFile file, int userId)
+        {
+            var (rows, parseError) = await ImportParser.ParseAsync(file);
+            var result = new ImportResultDto();
+            if (parseError != null) { result.Errors.Add(parseError); return result; }
+
+            foreach (var row in rows)
+            {
+                var studentEmail = ImportParser.Get(row, "StudentEmail", "Email", "email", "studentemail");
+                var courseCode = ImportParser.Get(row, "CourseCode", "Course", "course", "coursecode");
+                var gradeStr = ImportParser.Get(row, "GradeValue", "Grade", "grade", "gradevalue");
+                var comments = ImportParser.Get(row, "Comments", "comments");
+
+                if (string.IsNullOrWhiteSpace(studentEmail) || string.IsNullOrWhiteSpace(courseCode) || string.IsNullOrWhiteSpace(gradeStr))
+                { result.Errors.Add("Row skipped — missing StudentEmail, CourseCode or GradeValue"); result.Skipped++; continue; }
+
+                var student = await _studentRepo.GetByEmailAsync(studentEmail);
+                if (student == null) { result.Errors.Add($"Skipped — student '{studentEmail}' not found"); result.Skipped++; continue; }
+
+                var course = await _courseRepo.GetByCodeAsync(courseCode);
+                if (course == null) { result.Errors.Add($"Skipped — course '{courseCode}' not found"); result.Skipped++; continue; }
+
+                if (!decimal.TryParse(gradeStr, out var gradeValue) || gradeValue < 0 || gradeValue > 100)
+                { result.Errors.Add($"Skipped — invalid grade value '{gradeStr}'"); result.Skipped++; continue; }
+
+                var dto = new UpsertGradeDto { CourseId = course.Id, StudentId = student.Id, GradeValue = gradeValue, Comments = comments };
+                var (grade, error) = await UpsertAsync(dto, userId);
+                if (grade == null) { result.Errors.Add($"Skipped '{studentEmail}' — {error}"); result.Skipped++; }
+                else result.Imported++;
+            }
+            return result;
         }
 
         private async Task<GradeResponseDto?> LoadDto(int id)

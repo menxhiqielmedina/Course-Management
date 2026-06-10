@@ -12,8 +12,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
 import { useAppStore } from "@/store/useAppStore";
-import { getAdminStudents, addStudent, updateStudent, deleteStudent, type AdminStudent } from "@/lib/adminService";
+import { getAdminStudents, addStudent, updateStudent, deleteStudent, importStudents, type AdminStudent } from "@/lib/adminService";
 import { useDepartments } from "@/hooks/use-config";
+import { ExportImportBar } from "@/components/shared/ExportImportBar";
+import { exportToCSV, exportToExcel, exportToJSON } from "@/lib/exportUtils";
 
 const statusVariant = (s: string): "default" | "secondary" | "destructive" | "outline" => {
   if (s === "approved") return "default";
@@ -152,11 +154,27 @@ const Students = () => {
   return (
     <div className="space-y-6">
       <PageHeader title="Students" description={`${filtered.length} student${filtered.length !== 1 ? "s" : ""}`}>
-        {isAdmin && (
-          <Button onClick={() => setAddOpen(true)} className="gap-2">
-            <UserPlus className="h-4 w-4" /> Add Student
-          </Button>
-        )}
+        <div className="flex gap-2">
+          {isAdmin && (
+            <ExportImportBar
+              onExportCSV={() => exportToCSV(filtered.map((s) => ({ Name: s.fullName, Email: s.email, Department: s.department, Status: s.status, Joined: s.createdAt })), "students.csv")}
+              onExportExcel={() => exportToExcel(filtered.map((s) => ({ Name: s.fullName, Email: s.email, Department: s.department, Status: s.status, Joined: s.createdAt })), "students.xlsx")}
+              onExportJSON={() => exportToJSON(filtered.map((s) => ({ Name: s.fullName, Email: s.email, Department: s.department, Status: s.status, Joined: s.createdAt })), "students.json")}
+              onImport={async (file) => {
+                try {
+                  const result = await importStudents(file);
+                  toast({ title: `Imported ${result.imported} students`, description: result.errors.length ? result.errors.slice(0, 3).join("; ") : undefined });
+                  fetchStudents();
+                } catch { toast({ title: "Import failed", variant: "destructive" }); }
+              }}
+            />
+          )}
+          {isAdmin && (
+            <Button onClick={() => setAddOpen(true)} className="gap-2">
+              <UserPlus className="h-4 w-4" /> Add Student
+            </Button>
+          )}
+        </div>
       </PageHeader>
 
       <Card>
