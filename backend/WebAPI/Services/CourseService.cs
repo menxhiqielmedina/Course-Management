@@ -13,17 +13,20 @@ namespace WebAPI.Services
         private readonly IStudentRepository _studentRepo;
         private readonly IProfessorRepository _professorRepo;
         private readonly IGradeRepository _gradeRepo;
+        private readonly IEnrollmentRequestRepository _enrollmentRequestRepo;
 
         public CourseService(
             ICourseRepository courseRepo,
             IStudentRepository studentRepo,
             IProfessorRepository professorRepo,
-            IGradeRepository gradeRepo)
+            IGradeRepository gradeRepo,
+            IEnrollmentRequestRepository enrollmentRequestRepo)
         {
             _courseRepo = courseRepo;
             _studentRepo = studentRepo;
             _professorRepo = professorRepo;
             _gradeRepo = gradeRepo;
+            _enrollmentRequestRepo = enrollmentRequestRepo;
         }
 
         public async Task<List<CourseResponseDto>> GetAllAsync(string? search, string? status, string? department, int? userId = null, string? role = null)
@@ -246,6 +249,107 @@ namespace WebAPI.Services
                 else result.Imported++;
             }
             return result;
+        }
+
+        public async Task<(bool success, string error)> RequestEnrollmentAsync(int courseId, int studentUserId, string? note)
+        {
+            var student = await _studentRepo.GetByUserIdAsync(studentUserId);
+            if (student == null) return (false, "Student not found.");
+
+            var course = await _courseRepo.GetByIdAsync(courseId);
+            if (course == null || course.Status != "active") return (false, "Course not found or not active.");
+
+            if (await _courseRepo.IsEnrolledAsync(courseId, student.Id))
+                return (false, "You are already enrolled in this course.");
+
+            var existing = await _enrollmentRequestRepo.GetPendingByStudentAndCourseAsync(student.Id, courseId);
+            if (existing != null) return (false, "You already have a pending enrollment request for this course.");
+
+            await _enrollmentRequestRepo.AddAsync(new EnrollmentRequest
+            {
+                CourseId = courseId,
+                StudentId = student.Id,
+                Status = "pending",
+                Note = note?.Trim(),
+                RequestedAt = DateTime.UtcNow
+            });
+            await _enrollmentRequestRepo.SaveChangesAsync();
+            return (true, string.Empty);
+        }
+
+        public async Task<List<EnrollmentRequestResponseDto>> GetEnrollmentRequestsAsync(int courseId, int callerUserId, string role)
+        {
+            if (role == "professor")
+            {
+                var professor = await _professorRepo.GetByUserIdAsync(callerUserId);
+                var course = await _courseRepo.GetByIdAsync(courseId);
+                if (professor == null || course?.ProfessorId != professor.Id)
+                    return new List<EnrollmentRequestResponseDto>();
+            }
+
+            var requests = await _enrollmentRequestRepo.GetPendingByCourseAsync(courseId);
+            return requests.Select(r => new EnrollmentRequestResponseDto
+            {
+                Id = r.Id,
+                CourseId = r.CourseId,
+                StudentId = r.StudentId,
+                StudentName = r.Student.FullName,
+                StudentEmail = r.Student.Email,
+                StudentDepartment = r.Student.Department,
+                Status = r.Status,
+                Note = r.Note,
+                RequestedAt = r.RequestedAt,
+                ReviewedAt = r.ReviewedAt
+            }).ToList();
+        }
+
+        public async Task<(bool success, string error)> ApproveEnrollmentRequestAsync(int courseId, int requestId, int reviewerUserId)
+        {
+            var request = await _enrollmentRequestRepo.GetWithDetailsAsync(requestId);
+            if (request == null || request.CourseId != courseId) return (false, "Request not found.");
+            if (request.Status != "pending") return (false, "Request already reviewed.");
+
+            var course = await _courseRepo.GetWithDetailsAsync(courseId);
+            if (course == null) return (false, "Course not found.");
+            if (course.CourseStudents.Count >= course.Capacity) return (false, "Course is at full capacity.");
+
+            if (await _courseRepo.IsEnrolledAsync(courseId, request.StudentId))
+                return (false, "Student is already enrolled.");
+
+            await _courseRepo.AddEnrollmentAsync(new CourseStudent
+            {
+                CourseId = courseId,
+                StudentId = request.StudentId,
+                EnrolledAt = DateTime.UtcNow
+            });
+
+            request.Status = "approved";
+            request.ReviewedAt = DateTime.UtcNow;
+            request.ReviewedByUserId = reviewerUserId;
+            await _enrollmentRequestRepo.SaveChangesAsync();
+            return (true, string.Empty);
+        }
+
+        public async Task<(bool success, string error)> RejectEnrollmentRequestAsync(int courseId, int requestId, int reviewerUserId)
+        {
+            var request = await _enrollmentRequestRepo.GetWithDetailsAsync(requestId);
+            if (request == null || request.CourseId != courseId) return (false, "Request not found.");
+            if (request.Status != "pending") return (false, "Request already reviewed.");
+
+            request.Status = "rejected";
+            request.ReviewedAt = DateTime.UtcNow;
+            request.ReviewedByUserId = reviewerUserId;
+            await _enrollmentRequestRepo.SaveChangesAsync();
+            return (true, string.Empty);
+        }
+
+        public async Task<string> GetMyEnrollmentStatusAsync(int courseId, int studentUserId)
+        {
+            var student = await _studentRepo.GetByUserIdAsync(studentUserId);
+            if (student == null) return "none";
+
+            if (await _courseRepo.IsEnrolledAsync(courseId, student.Id)) return "enrolled";
+            return await _enrollmentRequestRepo.GetStatusByStudentAndCourseAsync(student.Id, courseId);
         }
 
         private static CourseResponseDto MapToDto(Course c) => new()

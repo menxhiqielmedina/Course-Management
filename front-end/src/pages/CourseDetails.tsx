@@ -20,7 +20,9 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { toast } from "@/hooks/use-toast";
 import {
   getCourseApi, getEnrolledStudentsApi, enrollStudentApi, removeStudentApi,
-  type CourseResponse, type EnrolledStudent,
+  getMyEnrollmentStatusApi, requestEnrollmentApi,
+  getEnrollmentRequestsApi, approveEnrollmentRequestApi, rejectEnrollmentRequestApi,
+  type CourseResponse, type EnrolledStudent, type EnrollmentRequestResponse, type EnrollmentStatus,
 } from "@/lib/courseService";
 import {
   getAssignmentsApi, getAllMySubmissionsApi, submitAssignmentApi, getMySubmissionApi,
@@ -66,6 +68,11 @@ const CourseDetails = () => {
   const [enrolling, setEnrolling] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<StudentOption | null>(null);
 
+  const isProfessor = user?.role === "professor";
+  const [enrollmentStatus, setEnrollmentStatus] = useState<EnrollmentStatus>("none");
+  const [requestingEnroll, setRequestingEnroll] = useState(false);
+  const [enrollmentRequests, setEnrollmentRequests] = useState<EnrollmentRequestResponse[]>([]);
+
   const courseId = Number(id);
 
   useEffect(() => {
@@ -76,14 +83,21 @@ const CourseDetails = () => {
       getAssignmentsApi({ courseId }),
       getFilesApi({ courseId }),
       isStudent ? getAllMySubmissionsApi() : Promise.resolve([]),
+      isStudent ? getMyEnrollmentStatusApi(courseId) : Promise.resolve(null),
+      isProfessor ? getEnrollmentRequestsApi(courseId) : Promise.resolve([]),
     ])
-      .then(([c, e, a, f, subs]) => {
-        setCourse(c); setEnrolled(e); setCourseAssignments(a); setCourseFiles(f);
+      .then(([c, e, a, f, subs, enrollStatus, reqs]) => {
+        setCourse(c as CourseResponse);
+        setEnrolled(e as EnrolledStudent[]);
+        setCourseAssignments(a as typeof courseAssignments);
+        setCourseFiles(f as typeof courseFiles);
         if (isStudent && Array.isArray(subs)) {
           const map: Record<number, SubmissionResponse> = {};
           (subs as SubmissionResponse[]).forEach((s) => { map[s.assignmentId] = s; });
           setMySubmissions(map);
         }
+        if (isStudent && enrollStatus) setEnrollmentStatus(enrollStatus as EnrollmentStatus);
+        if (isProfessor && Array.isArray(reqs)) setEnrollmentRequests(reqs as EnrollmentRequestResponse[]);
       })
       .catch(() => toast({ title: "Failed to load course", variant: "destructive" }))
       .finally(() => setLoadingCourse(false));
@@ -123,6 +137,47 @@ const CourseDetails = () => {
       toast({ title: "Student removed", description: `${fullName} removed from ${course.code}.` });
     } catch {
       toast({ title: "Failed to remove student", variant: "destructive" });
+    }
+  };
+
+  const handleRequestEnrollment = async () => {
+    if (!course) return;
+    setRequestingEnroll(true);
+    try {
+      await requestEnrollmentApi(course.id);
+      setEnrollmentStatus("pending");
+      toast({ title: "Request sent", description: "Your enrollment request has been sent to the professor." });
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      toast({ title: "Request failed", description: e?.response?.data?.message ?? "Something went wrong.", variant: "destructive" });
+    } finally {
+      setRequestingEnroll(false);
+    }
+  };
+
+  const handleApproveRequest = async (requestId: number) => {
+    if (!course) return;
+    try {
+      await approveEnrollmentRequestApi(course.id, requestId);
+      setEnrollmentRequests((prev) => prev.filter((r) => r.id !== requestId));
+      const updated = await getEnrolledStudentsApi(course.id);
+      setEnrolled(updated);
+      setCourse((c) => c ? { ...c, enrolledCount: updated.length } : c);
+      toast({ title: "Student enrolled", description: "Enrollment request approved." });
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      toast({ title: "Failed", description: e?.response?.data?.message ?? "Something went wrong.", variant: "destructive" });
+    }
+  };
+
+  const handleRejectRequest = async (requestId: number) => {
+    if (!course) return;
+    try {
+      await rejectEnrollmentRequestApi(course.id, requestId);
+      setEnrollmentRequests((prev) => prev.filter((r) => r.id !== requestId));
+      toast({ title: "Request rejected" });
+    } catch {
+      toast({ title: "Failed to reject request", variant: "destructive" });
     }
   };
 
@@ -186,6 +241,8 @@ const CourseDetails = () => {
 
   const pct = course.capacity > 0 ? Math.round((course.enrolledCount / course.capacity) * 100) : 0;
   const color = courseColor(course.id);
+  const isEnrolled = enrollmentStatus === "enrolled";
+  const canSeeCourseContent = !isStudent || isEnrolled;
 
   const filteredStudents = allStudents.filter((s) =>
     !enrolled.some((e) => e.studentId === s.id) &&
@@ -209,7 +266,7 @@ const CourseDetails = () => {
             <div>
               <Badge variant="secondary">{course.code}</Badge>
               <h1 className="text-3xl font-bold mt-2">{course.title}</h1>
-              <p className="text-muted-foreground mt-1">{course.department} Â· {course.semester}</p>
+              <p className="text-muted-foreground mt-1">{course.department} · {course.semester}</p>
             </div>
             <div className="flex gap-4 text-sm">
               <div><div className="text-2xl font-bold">{course.credits}</div><div className="text-xs text-muted-foreground">Credits</div></div>
@@ -217,6 +274,11 @@ const CourseDetails = () => {
               <div><div className="text-2xl font-bold">{pct}%</div><div className="text-xs text-muted-foreground">Filled</div></div>
             </div>
           </div>
+          {isStudent && enrollmentStatus === "enrolled" && (
+            <div className="mt-4">
+              <Badge className="bg-green-100 text-green-700 border-green-300">Enrolled</Badge>
+            </div>
+          )}
           <p className="mt-4 text-sm">{course.description}</p>
           <div className="mt-4 space-y-2">
             <div className="flex justify-between text-xs"><span>Enrollment</span><span>{course.enrolledCount} / {course.capacity}</span></div>
@@ -228,12 +290,41 @@ const CourseDetails = () => {
       <Tabs defaultValue="overview">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="students">Students ({enrolled.length})</TabsTrigger>
-          <TabsTrigger value="assignments">Assignments ({courseAssignments.length})</TabsTrigger>
-          <TabsTrigger value="files">Files ({courseFiles.length})</TabsTrigger>
+          {canSeeCourseContent && <TabsTrigger value="students">Students ({enrolled.length})</TabsTrigger>}
+          {canSeeCourseContent && <TabsTrigger value="assignments">Assignments ({courseAssignments.length})</TabsTrigger>}
+          {canSeeCourseContent && <TabsTrigger value="files">Files ({courseFiles.length})</TabsTrigger>}
+          {isProfessor && (
+            <TabsTrigger value="requests">
+              Requests {enrollmentRequests.length > 0 && <Badge className="ml-1 h-5 px-1.5 text-[10px]">{enrollmentRequests.length}</Badge>}
+            </TabsTrigger>
+          )}
         </TabsList>
 
-        <TabsContent value="overview" className="grid md:grid-cols-2 gap-4 mt-4">
+        <TabsContent value="overview" className="space-y-4 mt-4">
+          {isStudent && !isEnrolled && (
+            <Card className="border-dashed border-2">
+              <CardContent className="p-6 text-center space-y-3">
+                <div className="mx-auto h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                  <UserPlus className="h-6 w-6 text-primary" />
+                </div>
+                <div>
+                  <p className="font-semibold">You are not enrolled in this course</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {enrollmentStatus === "pending" && "Your enrollment request is pending professor approval."}
+                    {enrollmentStatus === "rejected" && "Your enrollment request was rejected. Contact the professor for more information."}
+                    {enrollmentStatus === "none" && "Send a request to the professor to join this course."}
+                  </p>
+                </div>
+                {enrollmentStatus === "none" && course.status === "active" && (
+                  <Button className="gradient-primary text-primary-foreground" onClick={handleRequestEnrollment} disabled={requestingEnroll}>
+                    {requestingEnroll ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <UserPlus className="h-4 w-4 mr-1" />}
+                    Request Enrollment
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          )}
+          <div className="grid md:grid-cols-2 gap-4">
           <Card>
             <CardHeader><CardTitle className="text-base">Instructor</CardTitle></CardHeader>
             <CardContent className="flex items-center gap-3">
@@ -254,46 +345,63 @@ const CourseDetails = () => {
               <div className="flex items-center gap-2"><BookOpen className="h-4 w-4 text-primary" /><span className="text-sm">{courseFiles.length} resources</span></div>
             </CardContent>
           </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="students" className="mt-4 space-y-3">
-          {isAdmin && (
-            <div className="flex justify-end">
-              <Button size="sm" onClick={() => setEnrollOpen(true)}>
-                <UserPlus className="h-4 w-4 mr-1" /> Enroll student
-              </Button>
-            </div>
+          {isStudent ? (
+            <Card>
+              <CardContent className="p-6 flex items-center gap-4">
+                <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Users className="h-7 w-7 text-primary" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{enrolled.length}</p>
+                  <p className="text-sm text-muted-foreground">students enrolled in this course</p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              {isAdmin && (
+                <div className="flex justify-end">
+                  <Button size="sm" onClick={() => setEnrollOpen(true)}>
+                    <UserPlus className="h-4 w-4 mr-1" /> Enroll student
+                  </Button>
+                </div>
+              )}
+              <Card><CardContent className="p-0">
+                {enrolled.length === 0 ? <EmptyState title="No students enrolled" /> : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Enrolled</TableHead>
+                        {isAdmin && <TableHead />}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {enrolled.map((s) => (
+                        <TableRow key={s.studentId}>
+                          <TableCell className="font-medium">{s.fullName}</TableCell>
+                          <TableCell className="text-muted-foreground">{s.email}</TableCell>
+                          <TableCell className="text-muted-foreground">{new Date(s.enrolledAt).toLocaleDateString()}</TableCell>
+                          {isAdmin && (
+                            <TableCell className="text-right">
+                              <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => handleRemove(s.studentId, s.fullName)}>
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent></Card>
+            </>
           )}
-          <Card><CardContent className="p-0">
-            {enrolled.length === 0 ? <EmptyState title="No students enrolled" /> : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Enrolled</TableHead>
-                    {isAdmin && <TableHead />}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {enrolled.map((s) => (
-                    <TableRow key={s.studentId}>
-                      <TableCell className="font-medium">{s.fullName}</TableCell>
-                      <TableCell className="text-muted-foreground">{s.email}</TableCell>
-                      <TableCell className="text-muted-foreground">{new Date(s.enrolledAt).toLocaleDateString()}</TableCell>
-                      {isAdmin && (
-                        <TableCell className="text-right">
-                          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => handleRemove(s.studentId, s.fullName)}>
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent></Card>
         </TabsContent>
 
         <TabsContent value="assignments" className="mt-4 space-y-2">
@@ -373,7 +481,7 @@ const CourseDetails = () => {
               <Card key={f.id}><CardContent className="p-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <FileText className="h-5 w-5 text-primary" />
-                  <div><p className="font-medium text-sm">{f.originalFileName}</p><p className="text-xs text-muted-foreground">{f.sizeFormatted} Â· {new Date(f.uploadedAt).toLocaleDateString()}</p></div>
+                  <div><p className="font-medium text-sm">{f.originalFileName}</p><p className="text-xs text-muted-foreground">{f.sizeFormatted} · {new Date(f.uploadedAt).toLocaleDateString()}</p></div>
                 </div>
                 <div className="flex gap-2">
                   {(f.contentType.startsWith("image/") || f.contentType === "application/pdf") && (
@@ -384,6 +492,47 @@ const CourseDetails = () => {
               </CardContent></Card>
             ))}
         </TabsContent>
+
+        {isProfessor && (
+          <TabsContent value="requests" className="mt-4">
+            <Card><CardContent className="p-0">
+              {enrollmentRequests.length === 0
+                ? <EmptyState icon={UserPlus} title="No pending requests" description="Students who request enrollment will appear here." />
+                : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Student</TableHead>
+                        <TableHead>Department</TableHead>
+                        <TableHead>Note</TableHead>
+                        <TableHead>Requested</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {enrollmentRequests.map((r) => (
+                        <TableRow key={r.id}>
+                          <TableCell>
+                            <p className="font-medium">{r.studentName}</p>
+                            <p className="text-xs text-muted-foreground">{r.studentEmail}</p>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">{r.studentDepartment}</TableCell>
+                          <TableCell className="text-muted-foreground text-sm">{r.note ?? "—"}</TableCell>
+                          <TableCell className="text-muted-foreground text-sm">{new Date(r.requestedAt).toLocaleDateString()}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex gap-2 justify-end">
+                              <Button size="sm" className="gradient-primary text-primary-foreground" onClick={() => handleApproveRequest(r.id)}>Approve</Button>
+                              <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => handleRejectRequest(r.id)}>Reject</Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+            </CardContent></Card>
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* Submit Dialog (Student) */}

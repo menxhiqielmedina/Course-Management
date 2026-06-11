@@ -17,5 +17,11 @@ namespace WebAPI.Interfaces
         Task<bool> DeleteAsync(int id);
         Task<List<CourseResponseDto>> GetEnrolledCoursesAsync(int userId);
         Task<ImportResultDto> ImportAsync(IFormFile file);
+
+        Task<(bool success, string error)> RequestEnrollmentAsync(int courseId, int studentUserId, string? note);
+        Task<List<EnrollmentRequestResponseDto>> GetEnrollmentRequestsAsync(int courseId, int callerUserId, string role);
+        Task<(bool success, string error)> ApproveEnrollmentRequestAsync(int courseId, int requestId, int reviewerUserId);
+        Task<(bool success, string error)> RejectEnrollmentRequestAsync(int courseId, int requestId, int reviewerUserId);
+        Task<string> GetMyEnrollmentStatusAsync(int courseId, int studentUserId);
     }
 }

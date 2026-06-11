@@ -70,6 +70,7 @@ builder.Services.AddScoped<IGradeRepository, GradeRepository>();
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 builder.Services.AddScoped<IScheduleRepository, ScheduleRepository>();
 builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+builder.Services.AddScoped<IEnrollmentRequestRepository, EnrollmentRequestRepository>();
 
 // Services
 builder.Services.AddScoped<IAuthService, AuthService>();

@@ -106,4 +106,24 @@ namespace WebAPI.DTOs
         [Required]
         public string Status { get; set; } = string.Empty;
     }
+
+    public class RequestEnrollmentDto
+    {
+        [MaxLength(500)]
+        public string? Note { get; set; }
+    }
+
+    public class EnrollmentRequestResponseDto
+    {
+        public int Id { get; set; }
+        public int CourseId { get; set; }
+        public int StudentId { get; set; }
+        public string StudentName { get; set; } = string.Empty;
+        public string StudentEmail { get; set; } = string.Empty;
+        public string StudentDepartment { get; set; } = string.Empty;
+        public string Status { get; set; } = "pending";
+        public string? Note { get; set; }
+        public DateTime RequestedAt { get; set; }
+        public DateTime? ReviewedAt { get; set; }
+    }
 }

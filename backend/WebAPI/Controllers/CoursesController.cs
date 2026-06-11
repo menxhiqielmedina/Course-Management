@@ -126,5 +126,54 @@ namespace WebAPI.Controllers
             var result = await _courseService.ImportAsync(file);
             return Ok(result);
         }
+
+        [HttpPost("{id}/enrollment-requests")]
+        [Authorize(Roles = "student")]
+        public async Task<IActionResult> RequestEnrollment(int id, [FromBody] RequestEnrollmentDto dto)
+        {
+            var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var (success, error) = await _courseService.RequestEnrollmentAsync(id, userId, dto?.Note);
+            if (!success) return BadRequest(new { message = error });
+            return Ok(new { message = "Enrollment request submitted." });
+        }
+
+        [HttpGet("{id}/enrollment-requests")]
+        [Authorize(Roles = "admin,professor")]
+        public async Task<IActionResult> GetEnrollmentRequests(int id)
+        {
+            var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var role = User.FindFirstValue(ClaimTypes.Role)!;
+            var requests = await _courseService.GetEnrollmentRequestsAsync(id, userId, role);
+            return Ok(requests);
+        }
+
+        [HttpPut("{id}/enrollment-requests/{reqId}/approve")]
+        [Authorize(Roles = "admin,professor")]
+        public async Task<IActionResult> ApproveEnrollmentRequest(int id, int reqId)
+        {
+            var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var (success, error) = await _courseService.ApproveEnrollmentRequestAsync(id, reqId, userId);
+            if (!success) return BadRequest(new { message = error });
+            return Ok(new { message = "Student approved and enrolled." });
+        }
+
+        [HttpPut("{id}/enrollment-requests/{reqId}/reject")]
+        [Authorize(Roles = "admin,professor")]
+        public async Task<IActionResult> RejectEnrollmentRequest(int id, int reqId)
+        {
+            var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var (success, error) = await _courseService.RejectEnrollmentRequestAsync(id, reqId, userId);
+            if (!success) return BadRequest(new { message = error });
+            return Ok(new { message = "Enrollment request rejected." });
+        }
+
+        [HttpGet("{id}/my-enrollment-status")]
+        [Authorize(Roles = "student")]
+        public async Task<IActionResult> GetMyEnrollmentStatus(int id)
+        {
+            var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var status = await _courseService.GetMyEnrollmentStatusAsync(id, userId);
+            return Ok(new { status });
+        }
     }
 }

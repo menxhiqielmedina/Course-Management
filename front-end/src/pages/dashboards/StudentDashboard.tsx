@@ -104,7 +104,7 @@ const StudentDashboard = () => {
                 const dueDate = new Date(a.dueDate);
                 const daysLeft = Math.ceil((dueDate.getTime() - Date.now()) / 86400000);
                 return (
-                  <div key={a.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/40 hover:bg-muted transition">
+                  <div key={a.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/40 hover:bg-muted transition cursor-pointer" onClick={() => navigate(`/courses/${a.courseId}`)}>
                     <div className="min-w-0">
                       <p className="font-medium text-sm truncate">{a.title}</p>
                       <p className="text-xs text-muted-foreground">

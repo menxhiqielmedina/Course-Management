@@ -98,3 +98,40 @@ export async function importCoursesApi(file: File): Promise<ImportResult> {
   const { data } = await api.post<ImportResult>("/courses/import", fd, { headers: { "Content-Type": "multipart/form-data" } });
   return data;
 }
+
+export interface EnrollmentRequestResponse {
+  id: number;
+  courseId: number;
+  studentId: number;
+  studentName: string;
+  studentEmail: string;
+  studentDepartment: string;
+  status: "pending" | "approved" | "rejected";
+  note: string | null;
+  requestedAt: string;
+  reviewedAt: string | null;
+}
+
+export type EnrollmentStatus = "enrolled" | "pending" | "approved" | "rejected" | "none";
+
+export async function requestEnrollmentApi(courseId: number, note?: string): Promise<void> {
+  await api.post(`/courses/${courseId}/enrollment-requests`, { note: note ?? null });
+}
+
+export async function getEnrollmentRequestsApi(courseId: number): Promise<EnrollmentRequestResponse[]> {
+  const { data } = await api.get<EnrollmentRequestResponse[]>(`/courses/${courseId}/enrollment-requests`);
+  return data;
+}
+
+export async function approveEnrollmentRequestApi(courseId: number, requestId: number): Promise<void> {
+  await api.put(`/courses/${courseId}/enrollment-requests/${requestId}/approve`);
+}
+
+export async function rejectEnrollmentRequestApi(courseId: number, requestId: number): Promise<void> {
+  await api.put(`/courses/${courseId}/enrollment-requests/${requestId}/reject`);
+}
+
+export async function getMyEnrollmentStatusApi(courseId: number): Promise<EnrollmentStatus> {
+  const { data } = await api.get<{ status: EnrollmentStatus }>(`/courses/${courseId}/my-enrollment-status`);
+  return data.status;
+}

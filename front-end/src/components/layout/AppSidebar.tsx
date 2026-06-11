@@ -36,7 +36,6 @@ const studentMain = [
   { title: "My Courses", url: "/courses", icon: BookOpen },
   { title: "Schedule", url: "/schedule", icon: Calendar },
   { title: "Grades", url: "/grades", icon: ClipboardList },
-  { title: "Files", url: "/files", icon: FolderOpen },
   { title: "Notifications", url: "/notifications", icon: Bell },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
