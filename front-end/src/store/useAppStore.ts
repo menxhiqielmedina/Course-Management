@@ -1,10 +1,31 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage } from "zustand/middleware";
+import CryptoJS from "crypto-js";
 import {
   getMyNotifications, markNotificationAsRead, markAllNotificationsAsRead, deleteNotification,
   type NotificationItem,
 } from "@/api/notificationApi";
 import { setAuthToken } from "@/lib/api";
+
+const _SK = import.meta.env.VITE_STORE_SECRET ?? "cms-x9k2p7q4r8";
+
+const encryptedStorage = {
+  getItem: (name: string): string | null => {
+    const raw = localStorage.getItem(name);
+    if (!raw) return null;
+    try {
+      return CryptoJS.AES.decrypt(raw, _SK).toString(CryptoJS.enc.Utf8) || null;
+    } catch {
+      return null;
+    }
+  },
+  setItem: (name: string, value: string): void => {
+    localStorage.setItem(name, CryptoJS.AES.encrypt(value, _SK).toString());
+  },
+  removeItem: (name: string): void => {
+    localStorage.removeItem(name);
+  },
+};
 
 export type Role = "admin" | "professor" | "student";
 
@@ -111,6 +132,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: "cms-app-store",
+      storage: createJSONStorage(() => encryptedStorage),
       partialize: (s) => ({ user: s.user, mustChangePassword: s.mustChangePassword, theme: s.theme }),
     }
   )
