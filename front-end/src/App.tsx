@@ -30,6 +30,7 @@ const Signup = lazy(() => import("./pages/Signup"));
 const PendingApprovals = lazy(() => import("./pages/admin/PendingApprovals"));
 const ChangePassword = lazy(() => import("./pages/ChangePassword"));
 const Grades = lazy(() => import("./pages/Grades"));
+const CmsPageView = lazy(() => import("./pages/CmsPageView"));
 
 
 const queryClient = new QueryClient();
@@ -73,6 +74,7 @@ const App = () => (
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/change-password" element={<ChangePassword />} />
+            <Route path="/pages/*" element={<CmsPageView />} />
             <Route element={<AppLayout />}>
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/courses" element={<Courses />} />

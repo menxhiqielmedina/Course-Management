@@ -9,5 +9,6 @@ namespace WebAPI.Interfaces
         Task<(CmsPageDto? page, string? error)> CreateAsync(CreateCmsPageDto dto, int userId);
         Task<(CmsPageDto? page, string? error)> UpdateAsync(int id, UpdateCmsPageDto dto);
         Task<bool> DeleteAsync(int id);
+        Task<CmsPageDto?> GetPublicBySlugAsync(string slug);
     }
 }

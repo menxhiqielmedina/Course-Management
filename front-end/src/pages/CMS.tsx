@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, Edit, Trash2, FileCode, Loader2 } from "lucide-react";
+import { Plus, Edit, Trash2, FileCode, Loader2, Eye } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -106,13 +106,23 @@ const CMS = () => {
                 <div className="flex-1 min-w-0">
                   <p className="font-medium">{p.title}</p>
                   <p className="text-xs text-muted-foreground font-mono">
-                    {p.slug} Â· updated {p.updatedAt ? p.updatedAt.slice(0, 10) : p.createdAt.slice(0, 10)}
+                    {p.slug} · updated {p.updatedAt ? p.updatedAt.slice(0, 10) : p.createdAt.slice(0, 10)}
                   </p>
                 </div>
                 <Badge variant={p.status === "published" ? "default" : "secondary"} className="capitalize">
                   {p.status}
                 </Badge>
                 <div className="flex gap-1">
+                  {p.status === "published" && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title="View page"
+                      onClick={() => window.open("/pages" + p.slug, "_blank")}
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  )}
                   <Button variant="ghost" size="icon" onClick={() => openEdit(p)}>
                     <Edit className="h-4 w-4" />
                   </Button>

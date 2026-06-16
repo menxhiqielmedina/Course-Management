@@ -23,6 +23,14 @@ namespace WebAPI.Controllers
         public async Task<IActionResult> GetAll() =>
             Ok(await _service.GetAllAsync());
 
+        [HttpGet("public/{**slug}")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetPublic(string slug)
+        {
+            var page = await _service.GetPublicBySlugAsync(slug);
+            return page == null ? NotFound(new { message = "Page not found." }) : Ok(page);
+        }
+
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(int id)
         {

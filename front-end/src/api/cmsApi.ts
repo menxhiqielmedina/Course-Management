@@ -32,3 +32,6 @@ export const updateCmsPage = (id: number, payload: CmsPagePayload): Promise<CmsP
 
 export const deleteCmsPage = (id: number): Promise<void> =>
   api.delete(`/cms/${id}`).then((r) => r.data);
+
+export const getPublicCmsPage = (slug: string): Promise<CmsPage> =>
+  api.get(`/cms/public/${slug.replace(/^\//, "")}`).then((r) => r.data);

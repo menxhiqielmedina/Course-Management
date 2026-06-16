@@ -76,6 +76,15 @@ namespace WebAPI.Services
             return true;
         }
 
+        public async Task<CmsPageDto?> GetPublicBySlugAsync(string slug)
+        {
+            var normalizedSlug = NormalizeSlug(slug);
+            var page = await _context.CmsPages
+                .Include(p => p.CreatedBy)
+                .FirstOrDefaultAsync(p => p.Slug == normalizedSlug && p.Status == "published");
+            return page == null ? null : Map(page);
+        }
+
         private static string NormalizeSlug(string slug)
         {
             slug = slug.Trim().ToLower();
